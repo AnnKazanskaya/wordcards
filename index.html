@@ -339,8 +339,10 @@
             <button class="seg-btn" data-scope="unknown">Незнакомые</button>
           </div>
           <div class="games-grid" style="margin-top:10px;">
+            <button class="btn btn-primary" id="learnBtn">🧠 Учить</button>
             <button class="btn btn-ghost" id="studyBtn">▶︎ Карточки</button>
-            <button class="btn btn-primary" id="quizBtn">✦ 4 варианта</button>
+            <button class="btn btn-ghost" id="quizBtn">✦ 4 варианта</button>
+            <button class="btn btn-ghost" id="writeBtn">⌨️ Написание</button>
             <button class="btn btn-ghost" id="scrambleBtn">🔤 Собери слово</button>
             <button class="btn btn-ghost" id="matchBtn">⚡ Подбор</button>
           </div>
@@ -396,6 +398,7 @@
           <div class="tiles" id="tilesArea"></div>
           <div class="correct-spelling hidden" id="scrambleCorrect"></div>
           <button class="btn btn-ghost" id="scrambleClear">Стереть</button>
+          <button class="btn btn-primary hidden" id="scrambleNext">Дальше →</button>
           <div class="study-progress" id="scrambleProgress"></div>
         </div>
       </div>
@@ -406,6 +409,40 @@
           <div class="match-top"><span class="match-timer" id="matchTimer">0.0 сек</span></div>
           <div class="match-grid" id="matchGrid"></div>
           <div class="study-progress" id="matchProgress"></div>
+        </div>
+      </div>
+
+      <!-- WRITE VIEW (написание — печатать слово) -->
+      <div class="view hidden" id="writeView">
+        <div class="study-wrap">
+          <div class="quiz-prompt">
+            <span class="flash-side">Напиши по-английски</span>
+            <div class="quiz-word" id="writeDef">—</div>
+          </div>
+          <input id="writeInput" placeholder="english word" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <div class="correct-spelling hidden" id="writeFeedback"></div>
+          <button class="btn btn-primary" id="writeCheck">Проверить</button>
+          <button class="btn btn-ghost hidden" id="writeOverride">Всё равно засчитать ✓</button>
+          <button class="btn btn-primary hidden" id="writeNext">Дальше →</button>
+          <div class="study-progress" id="writeProgress"></div>
+        </div>
+      </div>
+
+      <!-- LEARN VIEW (умная тренировка) -->
+      <div class="view hidden" id="learnView">
+        <div class="study-wrap">
+          <div class="quiz-prompt">
+            <span class="flash-side" id="learnSide">Выбери перевод</span>
+            <div class="quiz-word" id="learnWord">—</div>
+            <button class="speak-btn" id="learnSpeak">🔊</button>
+          </div>
+          <div class="quiz-options hidden" id="learnOptions"></div>
+          <input id="learnInput" class="hidden" placeholder="english word" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <div class="correct-spelling hidden" id="learnFeedback"></div>
+          <button class="btn btn-primary hidden" id="learnCheck">Проверить</button>
+          <button class="btn btn-ghost hidden" id="learnOverride">Всё равно засчитать ✓</button>
+          <button class="btn btn-primary hidden" id="learnNext">Дальше →</button>
+          <div class="study-progress" id="learnProgress"></div>
         </div>
       </div>
 
@@ -452,10 +489,18 @@
       deckView: $("deckView"), cardsList: $("cardsList"), studyBtn: $("studyBtn"),
       deckActions: $("deckActions"), scopeSeg: $("scopeSeg"), quizBtn: $("quizBtn"),
       scrambleBtn: $("scrambleBtn"), matchBtn: $("matchBtn"),
+      learnBtn: $("learnBtn"), writeBtn: $("writeBtn"),
+      writeView: $("writeView"), writeDef: $("writeDef"), writeInput: $("writeInput"),
+      writeFeedback: $("writeFeedback"), writeCheck: $("writeCheck"),
+      writeOverride: $("writeOverride"), writeNext: $("writeNext"), writeProgress: $("writeProgress"),
+      learnView: $("learnView"), learnSide: $("learnSide"), learnWord: $("learnWord"),
+      learnSpeak: $("learnSpeak"), learnOptions: $("learnOptions"), learnInput: $("learnInput"),
+      learnFeedback: $("learnFeedback"), learnCheck: $("learnCheck"),
+      learnOverride: $("learnOverride"), learnNext: $("learnNext"), learnProgress: $("learnProgress"),
       scrambleView: $("scrambleView"), scrambleHint: $("scrambleHint"),
       answerSlots: $("answerSlots"), tilesArea: $("tilesArea"),
       scrambleClear: $("scrambleClear"), scrambleProgress: $("scrambleProgress"),
-      scrambleCorrect: $("scrambleCorrect"),
+      scrambleCorrect: $("scrambleCorrect"), scrambleNext: $("scrambleNext"),
       matchView: $("matchView"), matchTimer: $("matchTimer"),
       matchGrid: $("matchGrid"), matchProgress: $("matchProgress"),
       resultView: $("resultView"), resultEmoji: $("resultEmoji"),
@@ -482,6 +527,8 @@
     let session = { list: [], index: 0, flipped: false, correct: 0, missed: [] };
     let scramble = { list: [], index: 0, score: 0, tiles: [], answer: [], display: "", targetLetters: "", locked: false, missed: [] };
     let match = { items: [], selEl: null, matched: 0, total: 0, start: 0, timer: null, wrong: 0, missed: [] };
+    let write = { list: [], index: 0, score: 0, locked: false, missed: [] };
+    let learn = { list: [], index: 0, score: 0, locked: false, missed: [], mode: "choice" };
     let lastResult = { type: null, missed: [] };
 
     // =========================================================
@@ -547,13 +594,15 @@
       el.quizView.classList.toggle("hidden", name !== "quiz");
       el.scrambleView.classList.toggle("hidden", name !== "scramble");
       el.matchView.classList.toggle("hidden", name !== "match");
+      el.writeView.classList.toggle("hidden", name !== "write");
+      el.learnView.classList.toggle("hidden", name !== "learn");
       el.resultView.classList.toggle("hidden", name !== "result");
       if (name !== "match" && match.timer) { clearInterval(match.timer); match.timer = null; }
       el.viewTitle.textContent = title;
       el.backBtn.classList.toggle("hidden", !showBack);
     }
 
-    const inGame = () => ["study", "quiz", "scramble", "match", "result"].includes(currentView);
+    const inGame = () => ["study", "quiz", "scramble", "match", "write", "learn", "result"].includes(currentView);
     el.backBtn.onclick = () => {
       if (inGame()) openDeck(currentDeck);
       else goDecks();
@@ -654,13 +703,18 @@
       } else {
         el.cardsList.innerHTML = '<div class="empty">Загрузка…</div>';
       }
-      // и обновляем из сети в фоне
+      // сначала досылаем несохранённый прогресс, потом обновляем из сети
+      await flushStreaks();
       const { data, error } = await client
         .from("cards").select("*").eq("deck_id", currentDeck.id).order("created_at", { ascending: true });
       if (error) {
         if (!cachedRaw) el.cardsList.innerHTML = `<div class="empty">Ошибка: ${error.message}</div>`;
         return;
       }
+      // если что-то ещё не синхронизировалось — не теряем локальный прогресс
+      let pending = {};
+      try { pending = JSON.parse(localStorage.getItem("pendingStreaks") || "{}"); } catch (_) {}
+      for (const c of data) if (c.id in pending) c.correct_streak = pending[c.id];
       cards = data;
       localStorage.setItem(cacheKey, JSON.stringify(data));
       renderCards();
@@ -764,6 +818,37 @@
       renderCards();
     }
 
+    // --- Надёжное сохранение прогресса (терпит обрыв сети) ---
+    // card.correct_streak обновляется вызывающим кодом; здесь сохраняем локально и в облако,
+    // а при ошибке кладём в очередь и повторяем позже.
+    function saveStreak(card) {
+      if (currentDeck) localStorage.setItem("cards_" + currentDeck.id, JSON.stringify(cards));
+      client.from("cards").update({ correct_streak: card.correct_streak }).eq("id", card.id)
+        .then(({ error }) => { if (error) queueStreak(card.id, card.correct_streak); })
+        .catch(() => queueStreak(card.id, card.correct_streak));
+    }
+    function queueStreak(id, streak) {
+      let q = {};
+      try { q = JSON.parse(localStorage.getItem("pendingStreaks") || "{}"); } catch (_) {}
+      q[id] = streak;
+      localStorage.setItem("pendingStreaks", JSON.stringify(q));
+    }
+    async function flushStreaks() {
+      if (!client || !user) return;
+      let q = {};
+      try { q = JSON.parse(localStorage.getItem("pendingStreaks") || "{}"); } catch (_) {}
+      const ids = Object.keys(q);
+      if (!ids.length) return;
+      for (const id of ids) {
+        try {
+          const { error } = await client.from("cards").update({ correct_streak: q[id] }).eq("id", id);
+          if (!error) delete q[id];
+        } catch (_) { /* оставляем в очереди до следующего раза */ }
+      }
+      localStorage.setItem("pendingStreaks", JSON.stringify(q));
+    }
+    window.addEventListener("online", flushStreaks);
+
     // =========================================================
     //  STUDY (режим карточек)
     // =========================================================
@@ -822,10 +907,7 @@
       const wasLearned = isLearned(card);
       const newStreak = known ? card.correct_streak + 1 : 0;
       card.correct_streak = newStreak; // локально сразу
-      // сохраняем в облако
-      client.from("cards").update({ correct_streak: newStreak }).eq("id", card.id).then(({ error }) => {
-        if (error) toast("Не удалось сохранить прогресс");
-      });
+      saveStreak(card);
       if (known) session.correct++;
       else session.missed.push(card);
       if (known && !wasLearned && isLearned(card)) toast("★ Слово выучено!");
@@ -892,8 +974,7 @@
 
       const wasLearned = isLearned(card);
       card.correct_streak = correct ? card.correct_streak + 1 : 0;
-      client.from("cards").update({ correct_streak: card.correct_streak }).eq("id", card.id)
-        .then(({ error }) => { if (error) toast("Не удалось сохранить прогресс"); });
+      saveStreak(card);
       if (correct) {
         quiz.score++;
         if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
@@ -911,6 +992,240 @@
     function finishQuiz() {
       renderCards();
       showResult({ type: "quiz", correct: quiz.score, wrong: quiz.missed.length, missed: quiz.missed });
+    }
+
+    // =========================================================
+    //  WRITE (написание — печатать слово)
+    // =========================================================
+    // приводим ответ к виду для сравнения: убираем регистр и лишние пробелы
+    function normAnswer(s) { return s.trim().toLowerCase().replace(/\s+/g, " "); }
+
+    el.writeBtn.onclick = () => startWrite();
+
+    function startWrite(override) {
+      const list = override || studyList();
+      if (!list.length) { toast("Нет слов для игры"); return; }
+      write = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [] };
+      showView("write", currentDeck.title, true);
+      showWrite();
+    }
+
+    function showWrite() {
+      write.locked = false;
+      const card = write.list[write.index];
+      el.writeDef.textContent = card.definition;
+      el.writeProgress.textContent = `${write.index + 1} из ${write.list.length}`;
+      el.writeInput.value = "";
+      el.writeInput.disabled = false;
+      el.writeFeedback.classList.add("hidden");
+      el.writeFeedback.textContent = "";
+      el.writeFeedback.style.color = "";
+      el.writeCheck.classList.remove("hidden");
+      el.writeOverride.classList.add("hidden");
+      el.writeNext.classList.add("hidden");
+      el.writeInput.focus();
+    }
+
+    function checkWrite() {
+      if (write.locked) return;
+      const card = write.list[write.index];
+      const typed = el.writeInput.value;
+      if (!normAnswer(typed)) { toast("Напиши слово"); return; }
+      write.locked = true;
+      el.writeInput.disabled = true;
+      el.writeCheck.classList.add("hidden");
+      const correct = normAnswer(typed) === normAnswer(card.term);
+      const wasLearned = isLearned(card);
+      if (correct) {
+        card.correct_streak = card.correct_streak + 1;
+        saveStreak(card);
+        write.score++;
+        speak(card.term);
+        el.writeFeedback.textContent = "Верно! " + card.term;
+        el.writeFeedback.style.color = "var(--ok)";
+        el.writeFeedback.classList.remove("hidden");
+        if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+        setTimeout(writeAdvance, 850);
+      } else {
+        // не списываем сразу — даём шанс «всё равно засчитать» при опечатке
+        el.writeFeedback.textContent = "Правильно: " + card.term;
+        el.writeFeedback.style.color = "var(--danger)";
+        el.writeFeedback.classList.remove("hidden");
+        speak(card.term);
+        el.writeOverride.classList.remove("hidden");
+        el.writeNext.classList.remove("hidden");
+      }
+    }
+
+    function writeMarkWrong() {
+      const card = write.list[write.index];
+      card.correct_streak = 0;
+      saveStreak(card);
+      write.missed.push(card);
+    }
+
+    function writeOverrideCorrect() {
+      const card = write.list[write.index];
+      const wasLearned = isLearned(card);
+      card.correct_streak = card.correct_streak + 1;
+      saveStreak(card);
+      write.score++;
+      if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+      el.writeOverride.classList.add("hidden");
+      writeAdvance();
+    }
+
+    function writeAdvance() {
+      write.index++;
+      if (write.index >= write.list.length) finishWrite();
+      else showWrite();
+    }
+
+    el.writeCheck.onclick = checkWrite;
+    el.writeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") checkWrite(); });
+    el.writeOverride.onclick = writeOverrideCorrect;
+    el.writeNext.onclick = () => { writeMarkWrong(); writeAdvance(); };
+
+    function finishWrite() {
+      renderCards();
+      showResult({ type: "write", correct: write.score, wrong: write.missed.length, missed: write.missed });
+    }
+
+    // =========================================================
+    //  LEARN (умная тренировка: выбор → печать)
+    // =========================================================
+    el.learnBtn.onclick = () => startLearn();
+
+    function startLearn(override) {
+      const list = override || studyList();
+      if (!list.length) { toast("Нет слов для игры"); return; }
+      if (cards.length < 2) { toast("Добавь хотя бы 2 слова"); return; }
+      learn = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], mode: "choice" };
+      showView("learn", currentDeck.title, true);
+      showLearn();
+    }
+
+    function showLearn() {
+      learn.locked = false;
+      const card = learn.list[learn.index];
+      // слабые слова — выбор из вариантов, окрепшие — печать по памяти
+      learn.mode = card.correct_streak >= 1 ? "write" : "choice";
+      el.learnWord.textContent = learn.mode === "choice" ? card.term : card.definition;
+      el.learnSide.textContent = learn.mode === "choice" ? "Выбери перевод" : "Напиши по-английски";
+      el.learnProgress.textContent = `${learn.index + 1} из ${learn.list.length}`;
+      el.learnFeedback.classList.add("hidden");
+      el.learnFeedback.textContent = "";
+      el.learnFeedback.style.color = "";
+      el.learnOverride.classList.add("hidden");
+      el.learnNext.classList.add("hidden");
+
+      if (learn.mode === "choice") {
+        el.learnInput.classList.add("hidden");
+        el.learnCheck.classList.add("hidden");
+        el.learnOptions.classList.remove("hidden");
+        speak(card.term);
+        const others = cards
+          .filter((c) => c.id !== card.id && c.definition !== card.definition)
+          .map((c) => c.definition);
+        const options = shuffle([card.definition, ...shuffle(others).slice(0, 3)]);
+        el.learnOptions.innerHTML = "";
+        for (const opt of options) {
+          const b = document.createElement("button");
+          b.className = "opt-btn";
+          b.textContent = opt;
+          b.onclick = () => learnChoose(b, opt, card);
+          el.learnOptions.appendChild(b);
+        }
+      } else {
+        el.learnOptions.classList.add("hidden");
+        el.learnInput.classList.remove("hidden");
+        el.learnInput.value = "";
+        el.learnInput.disabled = false;
+        el.learnCheck.classList.remove("hidden");
+        el.learnInput.focus();
+      }
+    }
+
+    function learnGrade(correct, card) {
+      const wasLearned = isLearned(card);
+      card.correct_streak = correct ? card.correct_streak + 1 : 0;
+      saveStreak(card);
+      if (correct) {
+        learn.score++;
+        if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+      } else {
+        learn.missed.push(card);
+      }
+    }
+
+    function learnChoose(btn, chosen, card) {
+      if (learn.locked) return;
+      learn.locked = true;
+      const correct = chosen === card.definition;
+      el.learnOptions.querySelectorAll(".opt-btn").forEach((b) => {
+        b.disabled = true;
+        if (b.textContent === card.definition) b.classList.add("correct");
+      });
+      if (!correct) btn.classList.add("wrong");
+      learnGrade(correct, card);
+      setTimeout(learnAdvance, correct ? 750 : 1300);
+    }
+
+    function learnCheckWrite() {
+      if (learn.locked) return;
+      const card = learn.list[learn.index];
+      const typed = el.learnInput.value;
+      if (!normAnswer(typed)) { toast("Напиши слово"); return; }
+      learn.locked = true;
+      el.learnInput.disabled = true;
+      el.learnCheck.classList.add("hidden");
+      const correct = normAnswer(typed) === normAnswer(card.term);
+      if (correct) {
+        learnGrade(true, card);
+        speak(card.term);
+        el.learnFeedback.textContent = "Верно! " + card.term;
+        el.learnFeedback.style.color = "var(--ok)";
+        el.learnFeedback.classList.remove("hidden");
+        setTimeout(learnAdvance, 850);
+      } else {
+        el.learnFeedback.textContent = "Правильно: " + card.term;
+        el.learnFeedback.style.color = "var(--danger)";
+        el.learnFeedback.classList.remove("hidden");
+        speak(card.term);
+        el.learnOverride.classList.remove("hidden");
+        el.learnNext.classList.remove("hidden");
+      }
+    }
+
+    function learnAdvance() {
+      learn.index++;
+      if (learn.index >= learn.list.length) finishLearn();
+      else showLearn();
+    }
+
+    el.learnCheck.onclick = learnCheckWrite;
+    el.learnInput.addEventListener("keydown", (e) => { if (e.key === "Enter") learnCheckWrite(); });
+    el.learnSpeak.onclick = () => { const c = learn.list[learn.index]; if (c) speak(c.term); };
+    el.learnOverride.onclick = () => {
+      const card = learn.list[learn.index];
+      const wasLearned = isLearned(card);
+      card.correct_streak = card.correct_streak + 1;
+      saveStreak(card);
+      learn.score++;
+      if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+      learnAdvance();
+    };
+    el.learnNext.onclick = () => {
+      const card = learn.list[learn.index];
+      card.correct_streak = 0;
+      saveStreak(card);
+      learn.missed.push(card);
+      learnAdvance();
+    };
+
+    function finishLearn() {
+      renderCards();
+      showResult({ type: "learn", correct: learn.score, wrong: learn.missed.length, missed: learn.missed });
     }
 
     // =========================================================
@@ -938,6 +1253,7 @@
       el.answerSlots.className = "answer-slots";
       el.scrambleCorrect.classList.add("hidden");
       el.scrambleCorrect.textContent = "";
+      el.scrambleNext.classList.add("hidden");
       renderScramble();
     }
 
@@ -1000,8 +1316,7 @@
 
       const wasLearned = isLearned(card);
       card.correct_streak = correct ? card.correct_streak + 1 : 0;
-      client.from("cards").update({ correct_streak: card.correct_streak }).eq("id", card.id)
-        .then(({ error }) => { if (error) toast("Не удалось сохранить прогресс"); });
+      saveStreak(card);
       if (correct) {
         scramble.score++;
         speak(card.term);
@@ -1014,11 +1329,18 @@
       }
 
       el.tilesArea.querySelectorAll(".tile").forEach((b) => (b.disabled = true));
-      setTimeout(() => {
+      const advance = () => {
         scramble.index++;
         if (scramble.index >= scramble.list.length) finishScramble();
         else showScramble();
-      }, correct ? 850 : 2000);
+      };
+      if (correct) {
+        setTimeout(advance, 850);
+      } else {
+        // правильный ответ остаётся на экране — переходим только по кнопке «Дальше»
+        el.scrambleNext.classList.remove("hidden");
+        el.scrambleNext.onclick = () => { el.scrambleNext.classList.add("hidden"); advance(); };
+      }
     }
 
     function finishScramble() {
@@ -1152,6 +1474,8 @@
       else if (lastResult.type === "quiz") startQuiz(list);
       else if (lastResult.type === "scramble") startScramble(list);
       else if (lastResult.type === "match") startMatch(list);
+      else if (lastResult.type === "write") startWrite(list);
+      else if (lastResult.type === "learn") startLearn(list);
     };
     el.resultBackBtn.onclick = () => openDeck(currentDeck);
 
