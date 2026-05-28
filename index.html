@@ -699,6 +699,40 @@
     el.addCardBtn.onclick = addCard;
     el.defInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCard(); });
 
+    // Enter в поле слова — перейти к переводу (заодно сработает автоперевод)
+    el.termInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); el.defInput.focus(); }
+    });
+
+    // Автоперевод EN→RU через бесплатный сервис MyMemory (без ключа)
+    async function translateWord(text) {
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ru`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("network");
+      const data = await res.json();
+      const t = data && data.responseData && data.responseData.translatedText;
+      if (!t || Number(data.responseStatus) !== 200) throw new Error("no-translation");
+      return t.trim();
+    }
+
+    let translating = false;
+    el.termInput.addEventListener("blur", async () => {
+      const term = el.termInput.value.trim();
+      if (!term || el.defInput.value.trim() || translating) return;  // не трогаем, если перевод уже введён
+      translating = true;
+      const ph = el.defInput.placeholder;
+      el.defInput.placeholder = "перевожу…";
+      try {
+        const t = await translateWord(term);
+        if (!el.defInput.value.trim()) el.defInput.value = t;  // подставляем только в пустое поле
+      } catch (_) {
+        // тихо: сервис недоступен или лимит — просто впишешь вручную
+      } finally {
+        el.defInput.placeholder = ph;
+        translating = false;
+      }
+    });
+
     async function deleteCard(card) {
       const { error } = await client.from("cards").delete().eq("id", card.id);
       if (error) { toast("Ошибка: " + error.message); return; }
