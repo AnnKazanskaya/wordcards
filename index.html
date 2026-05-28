@@ -646,11 +646,23 @@
     }
 
     async function loadCards() {
-      el.cardsList.innerHTML = '<div class="empty">Загрузка…</div>';
+      const cacheKey = "cards_" + currentDeck.id;
+      // мгновенно показываем последние известные слова из памяти телефона
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        try { cards = JSON.parse(cachedRaw); renderCards(); } catch (_) {}
+      } else {
+        el.cardsList.innerHTML = '<div class="empty">Загрузка…</div>';
+      }
+      // и обновляем из сети в фоне
       const { data, error } = await client
         .from("cards").select("*").eq("deck_id", currentDeck.id).order("created_at", { ascending: true });
-      if (error) { el.cardsList.innerHTML = `<div class="empty">Ошибка: ${error.message}</div>`; return; }
+      if (error) {
+        if (!cachedRaw) el.cardsList.innerHTML = `<div class="empty">Ошибка: ${error.message}</div>`;
+        return;
+      }
       cards = data;
+      localStorage.setItem(cacheKey, JSON.stringify(data));
       renderCards();
     }
 
@@ -688,13 +700,24 @@
       const term = el.termInput.value.trim();
       const definition = el.defInput.value.trim();
       if (!term || !definition) { toast("Заполни оба поля"); return; }
-      const { error } = await client.from("cards").insert({
-        user_id: user.id, deck_id: currentDeck.id, term, definition,
-      });
-      if (error) { toast("Ошибка: " + error.message); return; }
-      el.termInput.value = ""; el.defInput.value = "";
-      el.termInput.focus();
-      await loadCards();
+      el.addCardBtn.disabled = true;
+      try {
+        const { data, error } = await client.from("cards").insert({
+          user_id: user.id, deck_id: currentDeck.id, term, definition,
+        }).select().single();
+        if (error) { toast("Ошибка: " + error.message); return; }
+        // добавляем слово в список сразу, без повторной загрузки всего набора
+        cards.push(data);
+        localStorage.setItem("cards_" + currentDeck.id, JSON.stringify(cards));
+        renderCards();
+        el.termInput.value = ""; el.defInput.value = "";
+        el.termInput.focus();
+      } catch (_) {
+        // обрыв мобильной сети — слово остаётся в полях, можно нажать ещё раз
+        toast("Нет связи. Слово не потеряно — нажми «Добавить» ещё раз");
+      } finally {
+        el.addCardBtn.disabled = false;
+      }
     }
     el.addCardBtn.onclick = addCard;
     el.defInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCard(); });
@@ -736,7 +759,9 @@
     async function deleteCard(card) {
       const { error } = await client.from("cards").delete().eq("id", card.id);
       if (error) { toast("Ошибка: " + error.message); return; }
-      await loadCards();
+      cards = cards.filter((c) => c.id !== card.id);
+      localStorage.setItem("cards_" + currentDeck.id, JSON.stringify(cards));
+      renderCards();
     }
 
     // =========================================================
