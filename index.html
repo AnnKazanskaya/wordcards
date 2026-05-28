@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>WordCards — учим английский</title>
+
+  <!-- PWA: установка на телефон -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="WordCards" />
+
+  <!-- Supabase JS client (loaded from CDN, no install needed) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --ink: #1c1c1e;
+      --muted: #8a8a8e;
+      --line: #e6e6e8;
+      --accent: #4f46e5;
+      --accent-soft: #eef0ff;
+      --danger: #e5484d;
+      --ok: #1a9e54;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+
+    .app {
+      max-width: 460px;
+      margin: 0 auto;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---------- Notice banner ---------- */
+    .notice {
+      background: #fff4e5;
+      color: #8a5a00;
+      font-size: 13px;
+      padding: 10px 16px;
+      text-align: center;
+      border-bottom: 1px solid #ffe3b3;
+    }
+    .notice.hidden { display: none; }
+
+    /* ---------- Auth screen ---------- */
+    .auth {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 24px 20px;
+    }
+    .brand { text-align: center; margin-bottom: 28px; }
+    .brand h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+    .brand p { color: var(--muted); font-size: 15px; margin-top: 4px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px 20px;
+    }
+
+    .tabs {
+      display: flex; gap: 4px;
+      background: var(--bg);
+      border-radius: 10px; padding: 4px; margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1; text-align: center; padding: 9px;
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      background: transparent; border: none; border-radius: 8px; cursor: pointer;
+      transition: all .15s;
+    }
+    .tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+    label {
+      display: block; font-size: 13px; font-weight: 600; color: var(--muted);
+      margin-bottom: 6px; margin-top: 14px;
+    }
+    input {
+      width: 100%; padding: 12px 14px; font-size: 16px;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: var(--surface); color: var(--ink);
+      transition: border-color .15s;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+
+    .btn {
+      padding: 13px 16px; font-size: 15px; font-weight: 600;
+      border: none; border-radius: 10px; cursor: pointer;
+      transition: opacity .15s; width: 100%;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-secondary { background: var(--accent-soft); color: var(--accent); }
+    .btn-ghost { background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .msg { font-size: 13px; margin-top: 14px; text-align: center; min-height: 18px; }
+    .msg.error { color: var(--danger); }
+    .msg.success { color: var(--ok); }
+
+    /* ---------- App (after login) ---------- */
+    .home { flex: 1; display: none; flex-direction: column; }
+    .home.active { display: flex; }
+
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-bottom: 1px solid var(--line);
+      background: var(--surface); position: sticky; top: 0; z-index: 5;
+    }
+    .topbar .view-title { font-size: 17px; font-weight: 700; flex: 1; }
+    .icon-btn {
+      background: none; border: none; font-size: 20px; cursor: pointer;
+      color: var(--ink); line-height: 1; padding: 2px 6px;
+    }
+    .link-btn { background: none; border: none; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; }
+
+    .view { flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .view.hidden { display: none; }
+
+    /* deck & card list items */
+    .list-item {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px; display: flex; align-items: center; gap: 12px; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .list-item:hover { border-color: var(--accent); }
+    .list-item .grow { flex: 1; min-width: 0; }
+    .list-item .li-title { font-weight: 600; }
+    .list-item .li-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    .card-row {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .card-row .grow { flex: 1; min-width: 0; }
+    .card-row .term { font-weight: 600; }
+    .card-row .def { font-size: 14px; color: var(--muted); }
+    .badge-learned { color: var(--ok); font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+    .del-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 18px; padding: 2px 6px; line-height: 1;
+    }
+    .del-btn:hover { color: var(--danger); }
+
+    /* add row (deck or card) */
+    .add-row { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .add-row .inputs { display: flex; gap: 8px; }
+    .add-row .inputs input { flex: 1; }
+
+    .empty { text-align: center; color: var(--muted); padding: 32px 12px; font-size: 15px; }
+
+    .row-2 { display: flex; gap: 10px; }
+    .row-2 .btn { width: auto; flex: 1; }
+
+    /* ---------- Flashcard study ---------- */
+    .study-wrap { flex: 1; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+    .flashcard {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      min-height: 240px; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; padding: 24px; cursor: pointer; position: relative;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .flash-text { font-size: 30px; font-weight: 700; text-align: center; }
+    .flash-side { position: absolute; top: 14px; left: 16px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .flash-hint { font-size: 13px; color: var(--muted); }
+    .speak-btn {
+      background: var(--accent-soft); color: var(--accent); border: none;
+      width: 44px; height: 44px; border-radius: 50%; font-size: 20px; cursor: pointer;
+    }
+    .study-progress { text-align: center; font-size: 14px; color: var(--muted); }
+
+    /* segmented scope toggle */
+    .seg { display: flex; gap: 4px; background: var(--bg); border-radius: 10px; padding: 4px; }
+    .seg-btn {
+      flex: 1; padding: 9px; font-size: 13px; font-weight: 600; color: var(--muted);
+      background: transparent; border: none; border-radius: 8px; cursor: pointer;
+    }
+    .seg-btn.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+    /* quiz (4 варианта) */
+    .quiz-prompt {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px;
+      position: relative; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .quiz-word { font-size: 30px; font-weight: 700; text-align: center; }
+    .quiz-options { display: flex; flex-direction: column; gap: 10px; }
+    .opt-btn {
+      padding: 14px 16px; font-size: 16px; font-weight: 600; text-align: left;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      cursor: pointer; color: var(--ink); transition: all .15s;
+    }
+    .opt-btn:hover { border-color: var(--accent); }
+    .opt-btn.correct { background: #e7f7ee; border-color: var(--ok); color: var(--ok); }
+    .opt-btn.wrong { background: #fdeaea; border-color: var(--danger); color: var(--danger); }
+    .opt-btn:disabled { cursor: default; }
+
+    /* кнопки игр 2x2 */
+    .games-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .games-grid .btn { width: 100%; }
+
+    /* собери слово */
+    .answer-slots {
+      display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+      min-height: 50px; align-items: center; margin: 6px 0;
+    }
+    .slot {
+      min-width: 34px; height: 46px; padding: 0 6px;
+      border-bottom: 3px solid var(--line);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 700;
+    }
+    .slot.filled { border-bottom-color: var(--accent); cursor: pointer; }
+    .answer-slots.correct .slot { border-bottom-color: var(--ok); color: var(--ok); }
+    .answer-slots.wrong .slot { border-bottom-color: var(--danger); color: var(--danger); }
+    .tiles { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .tile {
+      min-width: 44px; height: 48px; padding: 0 10px; font-size: 22px; font-weight: 700;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+      cursor: pointer; color: var(--ink);
+    }
+    .tile:hover:not(:disabled) { border-color: var(--accent); }
+    .tile:disabled { opacity: .25; cursor: default; }
+
+    /* подбор на время */
+    .match-top { text-align: center; }
+    .match-timer { font-size: 20px; font-weight: 700; color: var(--accent); }
+    .match-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .match-tile {
+      min-height: 64px; padding: 12px; font-size: 15px; font-weight: 600;
+      border-radius: 12px; background: var(--surface); border: 1px solid var(--line);
+      cursor: pointer; color: var(--ink); display: flex; align-items: center;
+      justify-content: center; text-align: center; transition: opacity .25s, background .15s, border-color .15s;
+    }
+    .match-tile.sel { border-color: var(--accent); background: var(--accent-soft); }
+    .match-tile.wrong { border-color: var(--danger); background: #fdeaea; }
+    .match-tile.gone { opacity: 0; pointer-events: none; }
+
+    /* пробел в "собери слово" */
+    .slot.space { border-bottom: none; min-width: 16px; }
+    .correct-spelling { text-align: center; font-size: 16px; font-weight: 700; color: var(--ok); }
+
+    /* экран результата */
+    .result-card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+      padding: 32px 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .result-emoji { font-size: 48px; line-height: 1; }
+    .result-stats { font-size: 22px; font-weight: 700; margin-top: 10px; }
+    .result-sub { color: var(--muted); margin-top: 4px; }
+
+    .hidden { display: none !important; }
+
+    /* toast */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 20px;
+      font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <div class="notice hidden" id="notice">
+      ⚙️ Вход пока не подключён — нужно добавить ключи Supabase.
+    </div>
+
+    <!-- ============ AUTH SCREEN ============ -->
+    <div class="auth" id="authScreen">
+      <div class="brand">
+        <h1>WordCards</h1>
+        <p>учим английские слова</p>
+      </div>
+      <div class="card">
+        <div class="tabs">
+          <button class="tab active" id="tabLogin">Вход</button>
+          <button class="tab" id="tabRegister">Регистрация</button>
+        </div>
+        <form id="authForm">
+          <label for="email">Почта</label>
+          <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required />
+          <label for="password">Пароль</label>
+          <input type="password" id="password" placeholder="минимум 6 символов" autocomplete="current-password" required minlength="6" />
+          <button type="submit" class="btn btn-primary" id="submitBtn">Войти</button>
+        </form>
+        <div class="msg" id="authMsg"></div>
+      </div>
+    </div>
+
+    <!-- ============ APP (after login) ============ -->
+    <div class="home" id="appScreen">
+      <div class="topbar">
+        <button class="icon-btn hidden" id="backBtn">←</button>
+        <span class="view-title" id="viewTitle">Мои наборы</span>
+        <button class="link-btn" id="logoutBtn">Выйти</button>
+      </div>
+
+      <!-- DECKS VIEW -->
+      <div class="view" id="decksView">
+        <div id="decksList"></div>
+        <div class="add-row">
+          <div class="inputs">
+            <input id="newDeckInput" placeholder="Название набора, напр. «Еда»" />
+            <button class="btn btn-secondary" id="newDeckBtn" style="width:auto;">Создать</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DECK DETAIL VIEW -->
+      <div class="view hidden" id="deckView">
+        <div id="deckActions">
+          <div class="seg" id="scopeSeg">
+            <button class="seg-btn active" data-scope="all">Все слова</button>
+            <button class="seg-btn" data-scope="unknown">Незнакомые</button>
+          </div>
+          <div class="games-grid" style="margin-top:10px;">
+            <button class="btn btn-ghost" id="studyBtn">▶︎ Карточки</button>
+            <button class="btn btn-primary" id="quizBtn">✦ 4 варианта</button>
+            <button class="btn btn-ghost" id="scrambleBtn">🔤 Собери слово</button>
+            <button class="btn btn-ghost" id="matchBtn">⚡ Подбор</button>
+          </div>
+        </div>
+        <div id="cardsList"></div>
+        <div class="add-row">
+          <div class="inputs">
+            <input id="termInput" placeholder="English word" autocapitalize="none" />
+            <input id="defInput" placeholder="перевод" />
+          </div>
+          <button class="btn btn-secondary" id="addCardBtn">+ Добавить слово</button>
+        </div>
+      </div>
+
+      <!-- STUDY VIEW -->
+      <div class="view hidden" id="studyView">
+        <div class="study-wrap">
+          <div class="flashcard" id="flashcard">
+            <span class="flash-side" id="flashSide">English</span>
+            <div class="flash-text" id="flashText">—</div>
+            <button class="speak-btn" id="speakBtn">🔊</button>
+            <div class="flash-hint">нажми на карточку, чтобы перевернуть</div>
+          </div>
+          <div class="row-2">
+            <button class="btn btn-ghost" id="dontKnowBtn">Не знаю</button>
+            <button class="btn btn-primary" id="knowBtn">Знаю ✓</button>
+          </div>
+          <div class="study-progress" id="studyProgress"></div>
+        </div>
+      </div>
+
+      <!-- QUIZ VIEW (4 варианта) -->
+      <div class="view hidden" id="quizView">
+        <div class="study-wrap">
+          <div class="quiz-prompt">
+            <span class="flash-side">Выбери перевод</span>
+            <div class="quiz-word" id="quizWord">—</div>
+            <button class="speak-btn" id="quizSpeak">🔊</button>
+          </div>
+          <div class="quiz-options" id="quizOptions"></div>
+          <div class="study-progress" id="quizProgress"></div>
+        </div>
+      </div>
+
+      <!-- SCRAMBLE VIEW (собери слово) -->
+      <div class="view hidden" id="scrambleView">
+        <div class="study-wrap">
+          <div class="quiz-prompt">
+            <span class="flash-side">Собери английское слово</span>
+            <div class="quiz-word" id="scrambleHint">—</div>
+          </div>
+          <div class="answer-slots" id="answerSlots"></div>
+          <div class="tiles" id="tilesArea"></div>
+          <div class="correct-spelling hidden" id="scrambleCorrect"></div>
+          <button class="btn btn-ghost" id="scrambleClear">Стереть</button>
+          <div class="study-progress" id="scrambleProgress"></div>
+        </div>
+      </div>
+
+      <!-- MATCH VIEW (подбор на время) -->
+      <div class="view hidden" id="matchView">
+        <div class="study-wrap">
+          <div class="match-top"><span class="match-timer" id="matchTimer">0.0 сек</span></div>
+          <div class="match-grid" id="matchGrid"></div>
+          <div class="study-progress" id="matchProgress"></div>
+        </div>
+      </div>
+
+      <!-- RESULT VIEW (итоги упражнения) -->
+      <div class="view hidden" id="resultView">
+        <div class="study-wrap">
+          <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🎉</div>
+            <div class="result-stats" id="resultStats">—</div>
+            <div class="result-sub" id="resultSub"></div>
+          </div>
+          <button class="btn btn-primary hidden" id="reworkBtn">💪 Работа над ошибками</button>
+          <button class="btn btn-ghost" id="resultBackBtn">Ко всем заданиям</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // =========================================================
+    //  CONFIG
+    // =========================================================
+    const SUPABASE_URL = "https://mxysxubcklvjsgltogtp.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_nLFuOAa_Wf2_zibgAk2KRQ_np2JfZv7";
+
+    const LEARNED_AT = 3; // слово "выучено" после 3 правильных подряд
+
+    // =========================================================
+    //  Элементы
+    // =========================================================
+    const $ = (id) => document.getElementById(id);
+    const el = {
+      notice: $("notice"),
+      authScreen: $("authScreen"), appScreen: $("appScreen"),
+      tabLogin: $("tabLogin"), tabRegister: $("tabRegister"),
+      form: $("authForm"), email: $("email"), password: $("password"),
+      submitBtn: $("submitBtn"), authMsg: $("authMsg"),
+      backBtn: $("backBtn"), viewTitle: $("viewTitle"), logoutBtn: $("logoutBtn"),
+      decksView: $("decksView"), decksList: $("decksList"),
+      newDeckInput: $("newDeckInput"), newDeckBtn: $("newDeckBtn"),
+      deckView: $("deckView"), cardsList: $("cardsList"), studyBtn: $("studyBtn"),
+      deckActions: $("deckActions"), scopeSeg: $("scopeSeg"), quizBtn: $("quizBtn"),
+      scrambleBtn: $("scrambleBtn"), matchBtn: $("matchBtn"),
+      scrambleView: $("scrambleView"), scrambleHint: $("scrambleHint"),
+      answerSlots: $("answerSlots"), tilesArea: $("tilesArea"),
+      scrambleClear: $("scrambleClear"), scrambleProgress: $("scrambleProgress"),
+      scrambleCorrect: $("scrambleCorrect"),
+      matchView: $("matchView"), matchTimer: $("matchTimer"),
+      matchGrid: $("matchGrid"), matchProgress: $("matchProgress"),
+      resultView: $("resultView"), resultEmoji: $("resultEmoji"),
+      resultStats: $("resultStats"), resultSub: $("resultSub"),
+      reworkBtn: $("reworkBtn"), resultBackBtn: $("resultBackBtn"),
+      termInput: $("termInput"), defInput: $("defInput"), addCardBtn: $("addCardBtn"),
+      studyView: $("studyView"), flashcard: $("flashcard"), flashSide: $("flashSide"),
+      flashText: $("flashText"), speakBtn: $("speakBtn"),
+      dontKnowBtn: $("dontKnowBtn"), knowBtn: $("knowBtn"), studyProgress: $("studyProgress"),
+      quizView: $("quizView"), quizWord: $("quizWord"), quizSpeak: $("quizSpeak"),
+      quizOptions: $("quizOptions"), quizProgress: $("quizProgress"),
+      toast: $("toast"),
+    };
+
+    let mode = "login";
+    let client = null;
+    let user = null;
+
+    // app state
+    let currentView = "decks";
+    let currentDeck = null;
+    let cards = [];
+    // study session
+    let session = { list: [], index: 0, flipped: false, correct: 0, missed: [] };
+    let scramble = { list: [], index: 0, score: 0, tiles: [], answer: [], display: "", targetLetters: "", locked: false, missed: [] };
+    let match = { items: [], selEl: null, matched: 0, total: 0, start: 0, timer: null, wrong: 0, missed: [] };
+    let lastResult = { type: null, missed: [] };
+
+    // =========================================================
+    //  Вспомогательное
+    // =========================================================
+    function toast(text) {
+      el.toast.textContent = text;
+      el.toast.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.toast.classList.remove("show"), 1800);
+    }
+
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      const v = speechSynthesis.getVoices().find(v => v.lang.startsWith("en"));
+      if (v) u.voice = v;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    }
+
+    function isLearned(card) { return card.correct_streak >= LEARNED_AT; }
+
+    // =========================================================
+    //  Экраны (auth vs app) и вкладки
+    // =========================================================
+    function setMode(next) {
+      mode = next;
+      const isLogin = mode === "login";
+      el.tabLogin.classList.toggle("active", isLogin);
+      el.tabRegister.classList.toggle("active", !isLogin);
+      el.submitBtn.textContent = isLogin ? "Войти" : "Создать аккаунт";
+      el.password.setAttribute("autocomplete", isLogin ? "current-password" : "new-password");
+      showMsg("", "");
+    }
+    el.tabLogin.onclick = () => setMode("login");
+    el.tabRegister.onclick = () => setMode("register");
+    function showMsg(text, type) {
+      el.authMsg.textContent = text;
+      el.authMsg.className = "msg" + (type ? " " + type : "");
+    }
+
+    function showAuth() {
+      el.authScreen.classList.remove("hidden");
+      el.appScreen.classList.remove("active");
+    }
+    async function enterApp(u) {
+      user = u;
+      el.authScreen.classList.add("hidden");
+      el.appScreen.classList.add("active");
+      await goDecks();
+    }
+
+    // =========================================================
+    //  Навигация между видами внутри приложения
+    // =========================================================
+    function showView(name, title, showBack) {
+      currentView = name;
+      el.decksView.classList.toggle("hidden", name !== "decks");
+      el.deckView.classList.toggle("hidden", name !== "deck");
+      el.studyView.classList.toggle("hidden", name !== "study");
+      el.quizView.classList.toggle("hidden", name !== "quiz");
+      el.scrambleView.classList.toggle("hidden", name !== "scramble");
+      el.matchView.classList.toggle("hidden", name !== "match");
+      el.resultView.classList.toggle("hidden", name !== "result");
+      if (name !== "match" && match.timer) { clearInterval(match.timer); match.timer = null; }
+      el.viewTitle.textContent = title;
+      el.backBtn.classList.toggle("hidden", !showBack);
+    }
+
+    const inGame = () => ["study", "quiz", "scramble", "match", "result"].includes(currentView);
+    el.backBtn.onclick = () => {
+      if (inGame()) openDeck(currentDeck);
+      else goDecks();
+    };
+
+    // случайная перестановка массива
+    function shuffle(a) {
+      a = a.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // список слов для занятия с учётом режима (все / только незнакомые)
+    let scope = "all"; // 'all' | 'unknown'
+    function studyList() {
+      return scope === "unknown" ? cards.filter((c) => !isLearned(c)) : cards.slice();
+    }
+
+    el.scopeSeg.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.onclick = () => {
+        scope = btn.dataset.scope;
+        el.scopeSeg.querySelectorAll(".seg-btn").forEach((b) =>
+          b.classList.toggle("active", b === btn));
+      };
+    });
+
+    // =========================================================
+    //  DECKS (наборы)
+    // =========================================================
+    async function goDecks() {
+      showView("decks", "Мои наборы", false);
+      await loadDecks();
+    }
+
+    async function loadDecks() {
+      el.decksList.innerHTML = '<div class="empty">Загрузка…</div>';
+      const { data, error } = await client
+        .from("decks").select("*").order("created_at", { ascending: true });
+      if (error) { el.decksList.innerHTML = `<div class="empty">Ошибка: ${error.message}</div>`; return; }
+
+      if (!data.length) {
+        el.decksList.innerHTML = '<div class="empty">Пока нет наборов.<br>Создай первый ниже 👇</div>';
+        return;
+      }
+      el.decksList.innerHTML = "";
+      for (const deck of data) {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.innerHTML = `
+          <div class="grow">
+            <div class="li-title"></div>
+            <div class="li-sub">Открыть набор</div>
+          </div>
+          <button class="del-btn" title="Удалить">🗑</button>`;
+        item.querySelector(".li-title").textContent = deck.title;
+        item.querySelector(".grow").onclick = () => openDeck(deck);
+        item.querySelector(".del-btn").onclick = (e) => { e.stopPropagation(); deleteDeck(deck); };
+        el.decksList.appendChild(item);
+      }
+    }
+
+    async function createDeck() {
+      const title = el.newDeckInput.value.trim();
+      if (!title) { toast("Введи название набора"); return; }
+      const { error } = await client.from("decks").insert({ user_id: user.id, title });
+      if (error) { toast("Ошибка: " + error.message); return; }
+      el.newDeckInput.value = "";
+      await loadDecks();
+    }
+    el.newDeckBtn.onclick = createDeck;
+    el.newDeckInput.addEventListener("keydown", (e) => { if (e.key === "Enter") createDeck(); });
+
+    async function deleteDeck(deck) {
+      if (!confirm(`Удалить набор «${deck.title}» вместе со словами?`)) return;
+      const { error } = await client.from("decks").delete().eq("id", deck.id);
+      if (error) { toast("Ошибка: " + error.message); return; }
+      await loadDecks();
+    }
+
+    // =========================================================
+    //  CARDS (слова внутри набора)
+    // =========================================================
+    async function openDeck(deck) {
+      currentDeck = deck;
+      showView("deck", deck.title, true);
+      await loadCards();
+    }
+
+    async function loadCards() {
+      el.cardsList.innerHTML = '<div class="empty">Загрузка…</div>';
+      const { data, error } = await client
+        .from("cards").select("*").eq("deck_id", currentDeck.id).order("created_at", { ascending: true });
+      if (error) { el.cardsList.innerHTML = `<div class="empty">Ошибка: ${error.message}</div>`; return; }
+      cards = data;
+      renderCards();
+    }
+
+    function renderCards() {
+      // счётчик незнакомых на переключателе
+      const unknownCount = cards.filter((c) => !isLearned(c)).length;
+      const unknownBtn = el.scopeSeg.querySelector('[data-scope="unknown"]');
+      if (unknownBtn) unknownBtn.textContent = `Незнакомые (${unknownCount})`;
+
+      if (!cards.length) {
+        el.cardsList.innerHTML = '<div class="empty">В наборе пока нет слов.<br>Добавь первое ниже 👇</div>';
+        el.deckActions.classList.add("hidden");
+        return;
+      }
+      el.deckActions.classList.remove("hidden");
+      el.cardsList.innerHTML = "";
+      for (const card of cards) {
+        const row = document.createElement("div");
+        row.className = "card-row";
+        row.innerHTML = `
+          <div class="grow">
+            <div class="term"></div>
+            <div class="def"></div>
+          </div>
+          ${isLearned(card) ? '<span class="badge-learned">✓ выучено</span>' : ""}
+          <button class="del-btn" title="Удалить">🗑</button>`;
+        row.querySelector(".term").textContent = card.term;
+        row.querySelector(".def").textContent = card.definition;
+        row.querySelector(".del-btn").onclick = () => deleteCard(card);
+        el.cardsList.appendChild(row);
+      }
+    }
+
+    async function addCard() {
+      const term = el.termInput.value.trim();
+      const definition = el.defInput.value.trim();
+      if (!term || !definition) { toast("Заполни оба поля"); return; }
+      const { error } = await client.from("cards").insert({
+        user_id: user.id, deck_id: currentDeck.id, term, definition,
+      });
+      if (error) { toast("Ошибка: " + error.message); return; }
+      el.termInput.value = ""; el.defInput.value = "";
+      el.termInput.focus();
+      await loadCards();
+    }
+    el.addCardBtn.onclick = addCard;
+    el.defInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCard(); });
+
+    async function deleteCard(card) {
+      const { error } = await client.from("cards").delete().eq("id", card.id);
+      if (error) { toast("Ошибка: " + error.message); return; }
+      await loadCards();
+    }
+
+    // =========================================================
+    //  STUDY (режим карточек)
+    // =========================================================
+    el.studyBtn.onclick = () => startStudy();
+
+    function startStudy(override) {
+      const list = override || studyList();
+      if (!list.length) { toast("Незнакомых слов нет 🎉 Переключись на «Все»"); return; }
+      session = { list: shuffle(list), index: 0, flipped: false, correct: 0, missed: [] };
+      showView("study", currentDeck.title, true);
+      showCard();
+    }
+
+    function showCard() {
+      const card = session.list[session.index];
+      if (!card) return;
+      session.flipped = false;
+      el.flashSide.textContent = "English";
+      el.flashText.textContent = card.term;
+      el.studyProgress.textContent = `${session.index + 1} из ${session.list.length}`;
+      speak(card.term);
+    }
+
+    el.flashcard.onclick = (e) => {
+      if (e.target === el.speakBtn) return;
+      const card = session.list[session.index];
+      if (!card) return;
+      session.flipped = !session.flipped;
+      if (session.flipped) {
+        el.flashSide.textContent = "Перевод";
+        el.flashText.textContent = card.definition;
+      } else {
+        el.flashSide.textContent = "English";
+        el.flashText.textContent = card.term;
+        speak(card.term);
+      }
+    };
+
+    el.speakBtn.onclick = (e) => {
+      e.stopPropagation();
+      const card = session.list[session.index];
+      if (card) speak(card.term);
+    };
+
+    el.quizSpeak.onclick = () => {
+      const card = quiz.list[quiz.index];
+      if (card) speak(card.term);
+    };
+
+    el.knowBtn.onclick = () => answer(true);
+    el.dontKnowBtn.onclick = () => answer(false);
+
+    async function answer(known) {
+      const card = session.list[session.index];
+      if (!card) return;
+      const wasLearned = isLearned(card);
+      const newStreak = known ? card.correct_streak + 1 : 0;
+      card.correct_streak = newStreak; // локально сразу
+      // сохраняем в облако
+      client.from("cards").update({ correct_streak: newStreak }).eq("id", card.id).then(({ error }) => {
+        if (error) toast("Не удалось сохранить прогресс");
+      });
+      if (known) session.correct++;
+      else session.missed.push(card);
+      if (known && !wasLearned && isLearned(card)) toast("★ Слово выучено!");
+
+      session.index++;
+      if (session.index >= session.list.length) finishStudy();
+      else showCard();
+    }
+
+    function finishStudy() {
+      renderCards();
+      showResult({ type: "study", correct: session.correct, wrong: session.missed.length, missed: session.missed });
+    }
+
+    // =========================================================
+    //  QUIZ (4 варианта)
+    // =========================================================
+    let quiz = { list: [], index: 0, score: 0, answered: false };
+
+    el.quizBtn.onclick = () => startQuiz();
+
+    function startQuiz(override) {
+      const list = override || studyList();
+      if (!list.length) { toast("Нет слов для игры"); return; }
+      if (cards.length < 2) { toast("Добавь хотя бы 2 слова"); return; }
+      quiz = { list: shuffle(list), index: 0, score: 0, answered: false, missed: [] };
+      showView("quiz", currentDeck.title, true);
+      showQuestion();
+    }
+
+    function showQuestion() {
+      quiz.answered = false;
+      const card = quiz.list[quiz.index];
+      el.quizWord.textContent = card.term;
+      el.quizProgress.textContent = `${quiz.index + 1} из ${quiz.list.length}`;
+      speak(card.term);
+
+      // варианты: правильный перевод + до 3 чужих (из всего набора)
+      const others = cards
+        .filter((c) => c.id !== card.id && c.definition !== card.definition)
+        .map((c) => c.definition);
+      const options = shuffle([card.definition, ...shuffle(others).slice(0, 3)]);
+
+      el.quizOptions.innerHTML = "";
+      for (const opt of options) {
+        const b = document.createElement("button");
+        b.className = "opt-btn";
+        b.textContent = opt;
+        b.onclick = () => chooseOption(b, opt, card);
+        el.quizOptions.appendChild(b);
+      }
+    }
+
+    function chooseOption(btn, chosen, card) {
+      if (quiz.answered) return;
+      quiz.answered = true;
+      const correct = chosen === card.definition;
+
+      el.quizOptions.querySelectorAll(".opt-btn").forEach((b) => {
+        b.disabled = true;
+        if (b.textContent === card.definition) b.classList.add("correct");
+      });
+      if (!correct) btn.classList.add("wrong");
+
+      const wasLearned = isLearned(card);
+      card.correct_streak = correct ? card.correct_streak + 1 : 0;
+      client.from("cards").update({ correct_streak: card.correct_streak }).eq("id", card.id)
+        .then(({ error }) => { if (error) toast("Не удалось сохранить прогресс"); });
+      if (correct) {
+        quiz.score++;
+        if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+      } else {
+        quiz.missed.push(card);
+      }
+
+      setTimeout(() => {
+        quiz.index++;
+        if (quiz.index >= quiz.list.length) finishQuiz();
+        else showQuestion();
+      }, correct ? 750 : 1300);
+    }
+
+    function finishQuiz() {
+      renderCards();
+      showResult({ type: "quiz", correct: quiz.score, wrong: quiz.missed.length, missed: quiz.missed });
+    }
+
+    // =========================================================
+    //  SCRAMBLE (собери слово)
+    // =========================================================
+    el.scrambleBtn.onclick = () => startScramble();
+
+    function startScramble(override) {
+      const list = override || studyList();
+      if (!list.length) { toast("Незнакомых слов нет 🎉 Переключись на «Все»"); return; }
+      scramble = { list: shuffle(list), index: 0, score: 0, tiles: [], answer: [], display: "", targetLetters: "", locked: false, missed: [] };
+      showView("scramble", currentDeck.title, true);
+      showScramble();
+    }
+
+    function showScramble() {
+      const card = scramble.list[scramble.index];
+      scramble.display = card.term;                          // как есть, с пробелами
+      scramble.targetLetters = card.term.replace(/\s+/g, ""); // буквы для плиток и проверки
+      scramble.tiles = shuffle(scramble.targetLetters.split("")).map((ch) => ({ ch, used: false }));
+      scramble.answer = [];
+      scramble.locked = false;
+      el.scrambleHint.textContent = card.definition;
+      el.scrambleProgress.textContent = `${scramble.index + 1} из ${scramble.list.length}`;
+      el.answerSlots.className = "answer-slots";
+      el.scrambleCorrect.classList.add("hidden");
+      el.scrambleCorrect.textContent = "";
+      renderScramble();
+    }
+
+    function renderScramble() {
+      // проходим слово по символам: пробел = пропуск, буква = слот (собранный или пустой)
+      el.answerSlots.innerHTML = "";
+      let li = 0; // сколько букв уже собрано
+      for (const ch of scramble.display) {
+        if (ch === " ") {
+          const sp = document.createElement("div");
+          sp.className = "slot space";
+          el.answerSlots.appendChild(sp);
+          continue;
+        }
+        if (li < scramble.answer.length) {
+          const pos = li;
+          const tileIdx = scramble.answer[pos];
+          const s = document.createElement("div");
+          s.className = "slot filled";
+          s.textContent = scramble.tiles[tileIdx].ch;
+          s.onclick = () => {
+            if (scramble.locked) return;
+            scramble.tiles[tileIdx].used = false;
+            scramble.answer.splice(pos, 1);
+            renderScramble();
+          };
+          el.answerSlots.appendChild(s);
+          li++;
+        } else {
+          const s = document.createElement("div");
+          s.className = "slot";
+          el.answerSlots.appendChild(s);
+        }
+      }
+      // плитки с буквами
+      el.tilesArea.innerHTML = "";
+      scramble.tiles.forEach((t, idx) => {
+        const b = document.createElement("button");
+        b.className = "tile";
+        b.textContent = t.ch;
+        b.disabled = t.used || scramble.locked;
+        b.onclick = () => {
+          if (scramble.locked) return;
+          t.used = true;
+          scramble.answer.push(idx);
+          renderScramble();
+          checkScramble();
+        };
+        el.tilesArea.appendChild(b);
+      });
+    }
+
+    function checkScramble() {
+      if (scramble.answer.length !== scramble.targetLetters.length) return;
+      scramble.locked = true;
+      const assembled = scramble.answer.map((i) => scramble.tiles[i].ch).join("");
+      const correct = assembled.toLowerCase() === scramble.targetLetters.toLowerCase();
+      const card = scramble.list[scramble.index];
+      el.answerSlots.classList.add(correct ? "correct" : "wrong");
+
+      const wasLearned = isLearned(card);
+      card.correct_streak = correct ? card.correct_streak + 1 : 0;
+      client.from("cards").update({ correct_streak: card.correct_streak }).eq("id", card.id)
+        .then(({ error }) => { if (error) toast("Не удалось сохранить прогресс"); });
+      if (correct) {
+        scramble.score++;
+        speak(card.term);
+        if (!wasLearned && isLearned(card)) toast("★ Слово выучено!");
+      } else {
+        scramble.missed.push(card);
+        el.scrambleCorrect.textContent = "Правильно: " + card.term;
+        el.scrambleCorrect.classList.remove("hidden");
+        speak(card.term);
+      }
+
+      el.tilesArea.querySelectorAll(".tile").forEach((b) => (b.disabled = true));
+      setTimeout(() => {
+        scramble.index++;
+        if (scramble.index >= scramble.list.length) finishScramble();
+        else showScramble();
+      }, correct ? 850 : 2000);
+    }
+
+    function finishScramble() {
+      renderCards();
+      showResult({ type: "scramble", correct: scramble.score, wrong: scramble.missed.length, missed: scramble.missed });
+    }
+
+    el.scrambleClear.onclick = () => {
+      if (scramble.locked) return;
+      scramble.answer.forEach((i) => (scramble.tiles[i].used = false));
+      scramble.answer = [];
+      renderScramble();
+    };
+
+    // =========================================================
+    //  MATCH (подбор на время)
+    // =========================================================
+    const MATCH_MAX = 6; // сколько пар в одном круге
+
+    el.matchBtn.onclick = () => startMatch();
+
+    function startMatch(override) {
+      const list = override || studyList();
+      if (list.length < 2) { toast("Нужно хотя бы 2 слова для игры"); return; }
+      const chosen = shuffle(list).slice(0, MATCH_MAX);
+      const items = [];
+      chosen.forEach((c) => {
+        items.push({ id: c.id, text: c.term, kind: "term" });
+        items.push({ id: c.id, text: c.definition, kind: "def" });
+      });
+      match = { items: shuffle(items), selEl: null, matched: 0, total: chosen.length, start: Date.now(), timer: null, wrong: 0, missed: [] };
+      showView("match", currentDeck.title, true);
+      renderMatch();
+      match.timer = setInterval(updateMatchTimer, 100);
+      updateMatchTimer();
+    }
+
+    function addMatchMissed(id) {
+      if (match.missed.some((c) => c.id === id)) return;
+      const card = cards.find((c) => c.id === id);
+      if (card) match.missed.push(card);
+    }
+
+    function updateMatchTimer() {
+      el.matchTimer.textContent = ((Date.now() - match.start) / 1000).toFixed(1) + " сек";
+    }
+
+    function renderMatch() {
+      el.matchGrid.innerHTML = "";
+      match.items.forEach((it) => {
+        const b = document.createElement("button");
+        b.className = "match-tile";
+        b.textContent = it.text;
+        b.dataset.id = it.id;
+        b.dataset.kind = it.kind;
+        b.onclick = () => clickMatch(b);
+        el.matchGrid.appendChild(b);
+      });
+      el.matchProgress.textContent = `Найди пары: 0 из ${match.total}`;
+    }
+
+    function clickMatch(btn) {
+      if (btn.classList.contains("gone") || btn.classList.contains("wrong")) return;
+      if (!match.selEl) { btn.classList.add("sel"); match.selEl = btn; return; }
+      if (btn === match.selEl) { btn.classList.remove("sel"); match.selEl = null; return; }
+
+      const a = match.selEl, b = btn;
+      const pair = a.dataset.id === b.dataset.id && a.dataset.kind !== b.dataset.kind;
+      match.selEl = null;
+
+      if (pair) {
+        a.classList.remove("sel");
+        a.classList.add("gone");
+        b.classList.add("gone");
+        match.matched++;
+        el.matchProgress.textContent = `Найди пары: ${match.matched} из ${match.total}`;
+        if (match.matched >= match.total) finishMatch();
+      } else {
+        match.wrong++;
+        addMatchMissed(a.dataset.id);
+        addMatchMissed(b.dataset.id);
+        a.classList.remove("sel");
+        a.classList.add("wrong");
+        b.classList.add("wrong");
+        setTimeout(() => { a.classList.remove("wrong"); b.classList.remove("wrong"); }, 600);
+      }
+    }
+
+    function finishMatch() {
+      clearInterval(match.timer);
+      match.timer = null;
+      const sec = ((Date.now() - match.start) / 1000).toFixed(1);
+      showResult({
+        type: "match",
+        correct: match.total,
+        wrong: match.wrong,
+        missed: match.missed,
+        sub: `Время: ${sec} сек`,
+      });
+    }
+
+    // =========================================================
+    //  RESULT (итоги + работа над ошибками)
+    // =========================================================
+    function dedupeCards(arr) {
+      const seen = new Set();
+      const out = [];
+      for (const c of arr) { if (!seen.has(c.id)) { seen.add(c.id); out.push(c); } }
+      return out;
+    }
+
+    function showResult({ type, correct, wrong, missed, sub }) {
+      lastResult = { type, missed: dedupeCards(missed || []) };
+      el.resultEmoji.textContent = wrong === 0 ? "🎉" : "💪";
+      el.resultStats.textContent = `${correct} верно · ${wrong} ${wrong === 1 ? "ошибка" : "ошибок"}`;
+      el.resultSub.textContent = sub || "";
+
+      const m = lastResult.missed.length;
+      // "подбор" нельзя переиграть с одним словом — нужно минимум 2
+      const canRework = m > 0 && !(type === "match" && m < 2);
+      el.reworkBtn.classList.toggle("hidden", !canRework);
+      el.reworkBtn.textContent = `💪 Работа над ошибками (${m})`;
+
+      showView("result", currentDeck.title, true);
+    }
+
+    el.reworkBtn.onclick = () => {
+      const list = lastResult.missed.slice();
+      if (!list.length) return;
+      if (lastResult.type === "study") startStudy(list);
+      else if (lastResult.type === "quiz") startQuiz(list);
+      else if (lastResult.type === "scramble") startScramble(list);
+      else if (lastResult.type === "match") startMatch(list);
+    };
+    el.resultBackBtn.onclick = () => openDeck(currentDeck);
+
+    // =========================================================
+    //  Авторизация
+    // =========================================================
+    const keysReady = SUPABASE_URL && SUPABASE_ANON_KEY;
+
+    if (keysReady) {
+      el.notice.classList.add("hidden");
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      client.auth.getSession().then(({ data }) => {
+        if (data.session) enterApp(data.session.user);
+        else showAuth();
+      });
+      client.auth.onAuthStateChange((_event, sess) => {
+        if (sess) { if (!el.appScreen.classList.contains("active")) enterApp(sess.user); }
+        else showAuth();
+      });
+    } else {
+      el.notice.classList.remove("hidden");
+      showAuth();
+    }
+
+    el.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = el.email.value.trim();
+      const password = el.password.value;
+      if (!keysReady) { showMsg("Вход ещё не подключён.", "error"); return; }
+      el.submitBtn.disabled = true;
+      showMsg("Минутку…", "");
+      try {
+        if (mode === "register") {
+          const { error } = await client.auth.signUp({ email, password });
+          if (error) throw error;
+          showMsg("Аккаунт создан!", "success");
+        } else {
+          const { error } = await client.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+        }
+      } catch (err) {
+        showMsg(translateError(err.message), "error");
+      } finally {
+        el.submitBtn.disabled = false;
+      }
+    });
+
+    el.logoutBtn.addEventListener("click", async () => {
+      if (client) await client.auth.signOut();
+    });
+
+    function translateError(msg) {
+      const m = (msg || "").toLowerCase();
+      if (m.includes("invalid login")) return "Неверная почта или пароль.";
+      if (m.includes("already registered")) return "Такая почта уже зарегистрирована.";
+      if (m.includes("password")) return "Пароль слишком короткий (минимум 6 символов).";
+      return msg;
+    }
+
+    setMode("login");
+    // прогреваем голоса TTS
+    if (window.speechSynthesis) speechSynthesis.getVoices();
+
+    // регистрируем service worker (работает только по https/localhost)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
