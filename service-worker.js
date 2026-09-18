@@ -1,5 +1,8 @@
-const CACHE = "wordcards-v2";
-const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png"];
+const CACHE = "wordcards-v4";
+const ASSETS = [
+  "./", "./index.html", "./app.js", "./packs.js", "./stories.js",
+  "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png",
+];
 
 // при установке — кладём оболочку приложения в кэш
 self.addEventListener("install", (e) => {
@@ -17,19 +20,26 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// кэш сначала (быстрый запуск офлайн), а в фоне обновляем из сети — stale-while-revalidate
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   // запросы к Supabase и переводу — всегда из сети, не кэшируем
   if (req.method !== "GET" || req.url.includes("supabase.co") || req.url.includes("mymemory")) return;
+
+  const isCode = req.mode === "navigate" || req.destination === "script" || req.destination === "document" || req.url.endsWith(".json");
+  if (isCode) {
+    // HTML / JS: сеть сначала (обновления видны сразу), кэш — только если оффлайн
+    e.respondWith(
+      fetch(req)
+        .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res; })
+        .catch(() => caches.match(req).then((c) => c || caches.match("./index.html")))
+    );
+    return;
+  }
+  // картинки и прочее: кэш сначала, обновляем фоном
   e.respondWith(
     caches.match(req).then((cached) => {
       const fromNet = fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-          return res;
-        })
+        .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res; })
         .catch(() => cached);
       return cached || fromNet;
     })
