@@ -41,7 +41,9 @@ const el = {
   // read
   readView: $("readView"), storiesList: $("storiesList"),
   readerView: $("readerView"), readerTitle: $("readerTitle"), readerLevel: $("readerLevel"),
-  readerText: $("readerText"), readerSpeakBtn: $("readerSpeakBtn"), readerDoneBtn: $("readerDoneBtn"),
+  readerText: $("readerText"), readerSpeakBtn: $("readerSpeakBtn"), readerTasksBtn: $("readerTasksBtn"),
+  tasksView: $("tasksView"), taskPrompt: $("taskPrompt"), taskKind: $("taskKind"), taskText: $("taskText"),
+  taskOptions: $("taskOptions"), taskFeedback: $("taskFeedback"), taskNext: $("taskNext"), taskProgress: $("taskProgress"),
   // stats
   statsView: $("statsView"), statsStreak: $("statsStreak"), statsBest: $("statsBest"), statsDays: $("statsDays"),
   heatmap: $("heatmap"), weekBars: $("weekBars"), statsTotal: $("statsTotal"), statsLearned: $("statsLearned"),
@@ -306,8 +308,8 @@ async function detectFeatures() {
 // =========================================================
 //  Навигация
 // =========================================================
-const EXERCISE_VIEWS = ["study", "quiz", "scramble", "match", "write", "learn", "result"];
-const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", stats: "stats" };
+const EXERCISE_VIEWS = ["study", "quiz", "scramble", "match", "write", "learn", "tasks", "result"];
+const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", tasks: "read", stats: "stats" };
 
 function showView(name, title, showBack) {
   currentView = name;
@@ -326,6 +328,7 @@ function showView(name, title, showBack) {
 
 const inGame = () => EXERCISE_VIEWS.includes(currentView);
 el.backBtn.onclick = () => {
+  if (currentView === "tasks" || (currentView === "result" && lastResult.type === "tasks")) { goRead(); return; }
   if (inGame()) { if (currentDeck && currentDeck.virtual) goHome(); else openDeck(currentDeck); }
   else if (currentView === "deck" || currentView === "packs") goDecks();
   else if (currentView === "reader") goRead();
@@ -456,7 +459,7 @@ function renderHome() {
   el.streakLabel.textContent = `${plural(st.current, "день", "дня", "дней")} подряд`;
   el.streakFire.classList.toggle("off", !st.todayActive);
   el.streakToday.textContent = today && today.reviewed
-    ? `сегодня: ${today.reviewed} ${plural(today.reviewed, "слово", "слова", "слов")} · ${today.correct} верно`
+    ? `сегодня: ${today.reviewed} ${plural(today.reviewed, "ответ", "ответа", "ответов")} · ${today.correct} верно`
     : (st.current > 0 ? "сегодня ещё не занималась — не теряй серию!" : "начни сегодня — и серия пойдёт 🔥");
 
   const total = allCards.length, learned = allCards.filter(isLearned).length;
@@ -518,7 +521,7 @@ function renderStats() {
     const cell = document.createElement("div");
     cell.className = "heat" + (k === today ? " today" : "");
     cell.dataset.l = lvl;
-    cell.title = `${k}: ${r} ${plural(r, "слово", "слова", "слов")}`;
+    cell.title = `${k}: ${r} ${plural(r, "ответ", "ответа", "ответов")}`;
     el.heatmap.appendChild(cell);
     k = shiftDay(k, 1);
   }
@@ -1296,8 +1299,9 @@ function dedupeCards(arr) {
   for (const c of arr) { if (!seen.has(c.id)) { seen.add(c.id); out.push(c); } }
   return out;
 }
-function showResult({ type, correct, wrong, missed, sub }) {
-  lastResult = { type, missed: dedupeCards(missed || []) };
+function showResult({ type, correct, wrong, missed, sub, title }) {
+  const isTasks = type === "tasks";
+  lastResult = { type, missed: isTasks ? (missed || []).slice() : dedupeCards(missed || []) };
   const perfect = wrong === 0;
   el.resultEmoji.textContent = perfect ? "🎉" : "💪";
   el.resultStats.textContent = `${correct} верно · ${wrong} ${wrong === 1 ? "ошибка" : "ошибок"}`;
@@ -1306,13 +1310,14 @@ function showResult({ type, correct, wrong, missed, sub }) {
   const canRework = m > 0 && !(type === "match" && m < 2);
   el.reworkBtn.classList.toggle("hidden", !canRework);
   el.reworkBtn.textContent = `💪 Работа над ошибками (${m})`;
-  el.resultBackBtn.textContent = currentDeck && currentDeck.virtual ? "На главную" : "Ко всем заданиям";
-  showView("result", currentDeck.title, true);
+  el.resultBackBtn.textContent = isTasks ? "К рассказам" : (currentDeck && currentDeck.virtual ? "На главную" : "Ко всем заданиям");
+  showView("result", title || currentDeck.title, true);
   if (perfect && correct >= 2) { confetti.burst(140); sfx.finish(); } else if (correct > 0) { sfx.finish(); }
 }
 el.reworkBtn.onclick = () => {
   const list = lastResult.missed.slice();
   if (!list.length) return;
+  if (lastResult.type === "tasks") { startTasks(tasks.story, list); return; }
   if (lastResult.type === "study") startStudy(list);
   else if (lastResult.type === "quiz") startQuiz(list);
   else if (lastResult.type === "scramble") startScramble(list);
@@ -1320,7 +1325,11 @@ el.reworkBtn.onclick = () => {
   else if (lastResult.type === "write") startWrite(list);
   else if (lastResult.type === "learn") startLearn(list);
 };
-el.resultBackBtn.onclick = () => { if (currentDeck && currentDeck.virtual) goHome(); else openDeck(currentDeck); };
+el.resultBackBtn.onclick = () => {
+  if (lastResult.type === "tasks") goRead();
+  else if (currentDeck && currentDeck.virtual) goHome();
+  else openDeck(currentDeck);
+};
 
 // =========================================================
 //  ЧИТАТЬ (рассказы + перевод по нажатию)
@@ -1335,13 +1344,17 @@ async function goRead() {
 }
 function renderStories() {
   const read = new Set(lsGet("readStories", []));
+  const scores = lsGet("storyScores", {});
   el.storiesList.innerHTML = "";
   for (const s of window.STORIES) {
     const n = (s.text.match(/\p{L}+/gu) || []).length;
+    const sc = scores[s.id];
+    const badge = sc ? `<span class="score-badge ${sc.best === sc.total ? "" : "partial"}">${sc.best}/${sc.total}</span>` : "";
     const item = document.createElement("div"); item.className = "list-item";
     item.innerHTML = `
       <div class="li-icon">${read.has(s.id) ? "✅" : "📖"}</div>
-      <div class="grow"><div class="li-title"></div><div class="li-sub">${n} ${plural(n, "слово", "слова", "слов")}${read.has(s.id) ? " · прочитано" : ""}</div></div>
+      <div class="grow"><div class="li-title"></div><div class="li-sub">${n} ${plural(n, "слово", "слова", "слов")} · ${(s.tasks || []).length} ${plural((s.tasks || []).length, "задание", "задания", "заданий")}</div></div>
+      ${badge}
       <span class="lvl ${s.level.toLowerCase()}">${s.level}</span>`;
     item.querySelector(".li-title").textContent = s.title;
     item.onclick = () => openStory(s);
@@ -1368,9 +1381,9 @@ function openStory(s) {
     }
     el.readerText.appendChild(p);
   }
-  const read = new Set(lsGet("readStories", []));
-  el.readerDoneBtn.textContent = read.has(s.id) ? "✓ Прочитано" : "Отметить прочитанным";
-  el.readerDoneBtn.disabled = read.has(s.id);
+  const sc = lsGet("storyScores", {})[s.id];
+  const n = (s.tasks || []).length;
+  el.readerTasksBtn.textContent = sc ? `Задания ещё раз (лучший ${sc.best}/${sc.total}) ›` : `Задания (${n}) ›`;
 }
 el.readerText.addEventListener("click", (e) => {
   const w = e.target.closest(".w"); if (!w) return;
@@ -1383,12 +1396,71 @@ el.readerSpeakBtn.onclick = () => {
   if (speechSynthesis.speaking) { speechSynthesis.cancel(); return; }
   speak(currentStory.text.replace(/\s+/g, " "));
 };
-el.readerDoneBtn.onclick = () => {
+el.readerTasksBtn.onclick = () => startTasks(currentStory);
+
+// ---------- Задания после чтения ----------
+let tasks = { story: null, list: [], index: 0, score: 0, locked: false, missed: [] };
+
+function markStoryRead(story) {
   const read = lsGet("readStories", []);
-  if (!read.includes(currentStory.id)) { read.push(currentStory.id); lsSet("readStories", read); }
-  el.readerDoneBtn.textContent = "✓ Прочитано"; el.readerDoneBtn.disabled = true;
-  confetti.burst(80); sfx.finish(); toast("Рассказ прочитан 📖");
-};
+  if (!read.includes(story.id)) { read.push(story.id); lsSet("readStories", read); }
+}
+function startTasks(story, override) {
+  const list = override || story.tasks || [];
+  if (!list.length) { markStoryRead(story); toast("Рассказ прочитан 📖"); goRead(); return; }
+  tasks = { story, list: override ? list.slice() : shuffle(list), index: 0, score: 0, locked: false, missed: [], rework: !!override };
+  showView("tasks", story.title, true);
+  showTask();
+}
+function showTask() {
+  const t = tasks.list[tasks.index];
+  tasks.locked = false;
+  el.taskProgress.textContent = `${tasks.index + 1} из ${tasks.list.length}`;
+  el.taskKind.textContent = t.type === "tf" ? "Верно или неверно?" : t.type === "gap" ? "Вставь слово" : "Выбери ответ";
+  el.taskText.textContent = t.q;
+  el.taskFeedback.classList.add("hidden"); el.taskFeedback.innerHTML = "";
+  el.taskNext.classList.add("hidden");
+  const opts = t.type === "tf" ? ["Верно", "Неверно"] : t.options;
+  el.taskOptions.innerHTML = "";
+  opts.forEach((o, i) => {
+    const b = document.createElement("button"); b.className = "opt-btn"; b.textContent = o;
+    b.onclick = () => answerTask(b, i);
+    el.taskOptions.appendChild(b);
+  });
+  pop(el.taskPrompt);
+}
+function answerTask(btn, i) {
+  if (tasks.locked) return;
+  tasks.locked = true;
+  const t = tasks.list[tasks.index];
+  const correctIdx = t.type === "tf" ? (t.a ? 0 : 1) : t.a;
+  const correct = i === correctIdx;
+  el.taskOptions.querySelectorAll(".opt-btn").forEach((b, j) => { b.disabled = true; if (j === correctIdx) b.classList.add("correct"); });
+  if (!correct) btn.classList.add("wrong");
+  if (correct) { tasks.score++; sfx.correct(); vibrate(12); } else { tasks.missed.push(t); sfx.wrong(); vibrate([30, 40, 30]); }
+  logStudy(1, correct ? 1 : 0, 0);
+  if (correct) { setTimeout(taskAdvance, 700); return; }
+  if (t.e) {
+    el.taskFeedback.innerHTML = "В тексте: <b></b>";
+    el.taskFeedback.querySelector("b").textContent = `«${t.e}»`;
+    el.taskFeedback.classList.remove("hidden");
+  }
+  el.taskNext.classList.remove("hidden");
+}
+function taskAdvance() { tasks.index++; if (tasks.index >= tasks.list.length) finishTasks(); else showTask(); }
+el.taskNext.onclick = taskAdvance;
+function finishTasks() {
+  const story = tasks.story;
+  markStoryRead(story);
+  if (!tasks.rework) {
+    const scores = lsGet("storyScores", {});
+    const total = (story.tasks || []).length;
+    const prev = scores[story.id];
+    if (!prev || tasks.score > prev.best) scores[story.id] = { best: tasks.score, total };
+    lsSet("storyScores", scores);
+  }
+  showResult({ type: "tasks", correct: tasks.score, wrong: tasks.missed.length, missed: tasks.missed, sub: story.title, title: story.title });
+}
 
 // поиск слова в словаре: точная форма → без окончаний (-s, -ed, -ing, -ly, -er…)
 function lookup(raw) {

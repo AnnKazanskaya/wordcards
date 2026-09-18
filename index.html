@@ -409,6 +409,11 @@
     .w { cursor: pointer; border-radius: 4px; padding: 0 1px; transition: background .12s; }
     .w:hover, .w.hl { background: var(--accent-soft); color: var(--accent); }
     .w.known { text-decoration: underline dotted var(--ok); text-underline-offset: 3px; }
+    .task-text { font-size: 21px; font-weight: 600; text-align: center; line-height: 1.45; margin-top: 10px; }
+    .task-feedback { font-size: 15px; color: var(--muted); text-align: center; padding: 4px 8px; line-height: 1.45; }
+    .task-feedback b { color: var(--ok); }
+    .score-badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
+    .score-badge.partial { background: var(--warn-bg); color: var(--warn-ink); }
     .reader-head { display: flex; align-items: center; gap: 10px; }
     .reader-head h2 { font-size: 22px; flex: 1; }
     .reader-hint { font-size: 13px; color: var(--muted); text-align: center; }
@@ -602,7 +607,21 @@
         </div>
         <div class="story-text" id="readerText"></div>
         <div class="reader-hint">нажми на слово — увидишь перевод</div>
-        <button class="btn btn-primary" id="readerDoneBtn">✓ Прочитано</button>
+        <button class="btn btn-primary" id="readerTasksBtn">Задания ›</button>
+      </div>
+
+      <!-- TASKS VIEW (задания после чтения) -->
+      <div class="view hidden" id="tasksView">
+        <div class="study-wrap">
+          <div class="quiz-prompt" id="taskPrompt">
+            <span class="flash-side" id="taskKind">Выбери ответ</span>
+            <div class="task-text" id="taskText">—</div>
+          </div>
+          <div class="quiz-options" id="taskOptions"></div>
+          <div class="task-feedback hidden" id="taskFeedback"></div>
+          <button class="btn btn-primary hidden" id="taskNext">Дальше ›</button>
+          <div class="study-progress" id="taskProgress"></div>
+        </div>
       </div>
 
       <!-- STATS VIEW -->
@@ -621,7 +640,7 @@
           <div class="heat-legend">меньше <span class="heat" data-l="0"></span><span class="heat" data-l="1"></span><span class="heat" data-l="2"></span><span class="heat" data-l="3"></span><span class="heat" data-l="4"></span> больше</div>
         </div>
         <div class="panel">
-          <h3>Слов за последние 7 дней</h3>
+          <h3>Ответов за последние 7 дней</h3>
           <div class="bars" id="weekBars"></div>
         </div>
         <div class="stat-row">
