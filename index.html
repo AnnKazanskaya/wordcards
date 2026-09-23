@@ -482,7 +482,14 @@
     .sheet h3 { font-size: 17px; }
     .sheet .hint { font-size: 13px; color: var(--muted); }
     .ws-word { font-size: 28px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-    .ws-base { font-size: 13px; color: var(--muted); }
+    .ws-forms { display: flex; flex-wrap: wrap; gap: 8px; }
+    .form-chip {
+      padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg);
+      font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; line-height: 1.2;
+    }
+    .form-chip small { font-weight: 500; color: var(--muted); }
+    .form-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+    .form-chip.active small { color: var(--accent); opacity: .8; }
     .ws-status { font-size: 13px; color: var(--ok); font-weight: 600; }
     .pick-list { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; }
     .pick-item { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); cursor: pointer; font-weight: 600; text-align: left; color: var(--ink); }
@@ -925,8 +932,10 @@
   <div class="sheet" id="wordSheet">
     <div class="sheet-handle"></div>
     <div class="ws-word"><span id="wsWord">—</span><button class="speak-btn" id="wsSpeak">🔊</button></div>
-    <div class="ws-base hidden" id="wsBase"></div>
-    <label for="wsTr" style="margin-top:4px;">Перевод</label>
+    <div class="ws-forms hidden" id="wsForms"></div>
+    <label for="wsTermInput" style="margin-top:4px;">Слово для карточки</label>
+    <input id="wsTermInput" placeholder="слово" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
+    <label for="wsTr">Перевод</label>
     <input id="wsTr" placeholder="перевод" />
     <div class="ws-status hidden" id="wsStatus"></div>
     <button class="btn btn-primary" id="wsAddBtn">+ Добавить в набор</button>
@@ -955,10 +964,10 @@
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js?v=7"></script>
-  <script src="stories.js?v=7"></script>
-  <script src="dialogues.js?v=7"></script>
-  <script src="books.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="packs.js?v=8"></script>
+  <script src="stories.js?v=8"></script>
+  <script src="dialogues.js?v=8"></script>
+  <script src="books.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

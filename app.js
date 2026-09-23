@@ -87,7 +87,7 @@ const el = {
   batchSheet: $("batchSheet"), batchText: $("batchText"), batchCount: $("batchCount"),
   batchAddBtn: $("batchAddBtn"), batchCloseBtn: $("batchCloseBtn"),
   exportSheet: $("exportSheet"), exportText: $("exportText"), exportCopyBtn: $("exportCopyBtn"), exportCloseBtn: $("exportCloseBtn"),
-  wordSheet: $("wordSheet"), wsWord: $("wsWord"), wsSpeak: $("wsSpeak"), wsBase: $("wsBase"),
+  wordSheet: $("wordSheet"), wsWord: $("wsWord"), wsSpeak: $("wsSpeak"), wsForms: $("wsForms"), wsTermInput: $("wsTermInput"),
   wsTr: $("wsTr"), wsStatus: $("wsStatus"), wsAddBtn: $("wsAddBtn"), wsCloseBtn: $("wsCloseBtn"),
   pickSheet: $("pickSheet"), pickList: $("pickList"), pickNewInput: $("pickNewInput"),
   pickNewBtn: $("pickNewBtn"), pickCloseBtn: $("pickCloseBtn"),
@@ -1940,30 +1940,87 @@ function lookup(raw) {
   return null;
 }
 
-async function openWordSheet(word) {
-  const clean = word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
-  const r = lookup(clean);
-  wsTerm = r ? r.base : clean.toLowerCase();
-  el.wsWord.textContent = clean;
-  el.wsBase.classList.toggle("hidden", !(r && r.base !== clean.toLowerCase()));
-  if (r && r.base !== clean.toLowerCase()) el.wsBase.textContent = `основа: ${r.base}`;
-  el.wsTr.value = r ? r.tr : "";
-  el.wsStatus.classList.add("hidden");
-  const inDeck = allCards.find((c) => c.term.toLowerCase() === wsTerm || c.term.toLowerCase() === clean.toLowerCase());
+// догадка о начальной форме для слова, которого нет в словаре (снимаем -s/-es/-ed/-ing)
+function guessBase(w) {
+  const V = "aeiou";
+  if (!w || w.length < 4 || /\s/.test(w)) return null;
+  const isV = (ch) => V.includes(ch);
+  const dropDouble = (s) => (s.length > 2 && s.at(-1) === s.at(-2) && !isV(s.at(-1))) ? s.slice(0, -1) : s;
+  const cvc = (s) => s.length >= 3 && !isV(s.at(-1)) && isV(s.at(-2)) && !isV(s.at(-3)) && !"wxy".includes(s.at(-1));
+  if (w.endsWith("ies") && w.length > 4) return w.slice(0, -3) + "y";
+  if (w.endsWith("ied") && w.length > 4) return w.slice(0, -3) + "y";
+  if (w.endsWith("ing") && w.length > 5) {
+    const s = w.slice(0, -3);
+    const d = dropDouble(s); if (d !== s) return d;
+    return (s.length <= 4 && cvc(s)) ? s + "e" : s;
+  }
+  if (w.endsWith("ed") && w.length > 4) {
+    const s = w.slice(0, -2);
+    const d = dropDouble(s); if (d !== s) return d;
+    if (s.endsWith("e")) return s;
+    return (s.length <= 4 && cvc(s)) ? s + "e" : s;
+  }
+  if (/(s|x|z|ch|sh)es$/.test(w) && w.length > 4) return w.slice(0, -2);
+  if (w.endsWith("s") && !w.endsWith("ss") && !w.endsWith("us") && w.length > 3) return w.slice(0, -1);
+  return null;
+}
+
+let wsSeen = "";
+function wsSetTerm(v) {
+  el.wsTermInput.value = v;
+  el.wsForms.querySelectorAll(".form-chip").forEach((c) => c.classList.toggle("active", c.dataset.v === v));
+  updateWsStatus();
+}
+function updateWsStatus() {
+  const t = el.wsTermInput.value.trim().toLowerCase();
+  wsTerm = t;
+  const inDeck = t && allCards.find((c) => c.term.toLowerCase() === t);
   if (inDeck) {
     const d = decks.find((x) => x.id === inDeck.deck_id);
-    el.wsStatus.textContent = `✓ уже в наборе${d ? ` «${d.title}»` : ""}`;
+    el.wsStatus.textContent = `✓ «${t}» уже в наборе${d ? ` «${d.title}»` : ""}`;
     el.wsStatus.classList.remove("hidden");
+  } else el.wsStatus.classList.add("hidden");
+}
+el.wsTermInput.addEventListener("input", () => {
+  el.wsForms.querySelectorAll(".form-chip").forEach((c) => c.classList.toggle("active", c.dataset.v === el.wsTermInput.value.trim().toLowerCase()));
+  updateWsStatus();
+});
+
+async function openWordSheet(word) {
+  const clean = word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
+  const seen = clean.toLowerCase();
+  const r = lookup(clean);
+  const single = !/\s/.test(seen);
+  let base = r ? r.base : null, guessed = false;
+  if (!base && single) { const g = guessBase(seen); if (g && g !== seen) { base = g; guessed = true; } }
+  wsSeen = seen;
+  el.wsWord.textContent = clean;
+
+  el.wsForms.innerHTML = "";
+  const showForms = !!base && base !== seen;
+  el.wsForms.classList.toggle("hidden", !showForms);
+  if (showForms) {
+    for (const [label, v] of [["в тексте", seen], [guessed ? "начальная (?)" : "начальная", base]]) {
+      const c = document.createElement("button"); c.type = "button"; c.className = "form-chip"; c.dataset.v = v;
+      c.innerHTML = `<small></small> `; c.querySelector("small").textContent = label + ":";
+      c.appendChild(document.createTextNode(v));
+      c.onclick = () => { sfx.tap(); wsSetTerm(v); };
+      el.wsForms.appendChild(c);
+    }
   }
+  el.wsTr.value = r ? r.tr : "";
+  el.wsTr.placeholder = "перевод";
+  wsSetTerm(showForms && !guessed ? base : seen);
+
   openSheet(el.wordSheet);
   speak(clean);
   if (!r) {
     el.wsTr.placeholder = "перевожу…";
-    try { const t = await translateWord(clean); if (!el.wsTr.value) el.wsTr.value = t; }
+    try { const t = await translateWord(clean); if (!el.wsTr.value) el.wsTr.value = t; el.wsTr.placeholder = "перевод"; }
     catch (_) { el.wsTr.placeholder = "введи перевод вручную"; }
   }
 }
-el.wsSpeak.onclick = () => speak(el.wsWord.textContent);
+el.wsSpeak.onclick = () => speak(el.wsTermInput.value.trim() || el.wsWord.textContent);
 
 // ---------- Выделила текст → «Прослушать» / «Перевести» ----------
 let selText = "";
@@ -1994,9 +2051,11 @@ el.selTranslate.onclick = () => {
 };
 el.wsCloseBtn.onclick = closeSheets;
 el.wsAddBtn.onclick = () => {
+  const term = el.wsTermInput.value.trim();
   const tr = el.wsTr.value.trim();
+  if (!term) { toast("Впиши слово"); el.wsTermInput.focus(); return; }
   if (!tr) { toast("Впиши перевод"); el.wsTr.focus(); return; }
-  openDeckPicker(wsTerm, tr);
+  openDeckPicker(term, tr);
 };
 
 function openDeckPicker(term, definition) {
