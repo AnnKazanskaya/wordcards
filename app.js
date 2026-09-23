@@ -37,7 +37,17 @@ const el = {
   scrambleBtn: $("scrambleBtn"), matchBtn: $("matchBtn"),
   learnBtn: $("learnBtn"), writeBtn: $("writeBtn"),
   termInput: $("termInput"), defInput: $("defInput"), addCardBtn: $("addCardBtn"),
-  batchBtn: $("batchBtn"), exportBtn: $("exportBtn"),
+  batchBtn: $("batchBtn"), exportBtn: $("exportBtn"), dirSeg: $("dirSeg"),
+  dictationBtn: $("dictationBtn"), pronBtn: $("pronBtn"),
+  flashSub: $("flashSub"), flashHint: $("flashHint"), studyChoices: $("studyChoices"), introNext: $("introNext"),
+  writeSide: $("writeSide"), writeSpeak: $("writeSpeak"),
+  pronView: $("pronView"), pronPrompt: $("pronPrompt"), pronWord: $("pronWord"), pronDef: $("pronDef"),
+  pronSpeak: $("pronSpeak"), pronMic: $("pronMic"), pronStatus: $("pronStatus"),
+  pronOverride: $("pronOverride"), pronNext: $("pronNext"), pronProgress: $("pronProgress"),
+  readSeg: $("readSeg"), readHint: $("readHint"), dialoguesList: $("dialoguesList"),
+  dialogueView: $("dialogueView"), chatWho: $("chatWho"), chatLog: $("chatLog"), chatOptions: $("chatOptions"),
+  portionCta: $("portionCta"), portionSub: $("portionSub"), homeAchCta: $("homeAchCta"), homeAchSub: $("homeAchSub"),
+  achGrid: $("achGrid"), achCount: $("achCount"),
   // read
   readView: $("readView"), storiesList: $("storiesList"),
   readerView: $("readerView"), readerTitle: $("readerTitle"), readerLevel: $("readerLevel"),
@@ -308,18 +318,18 @@ async function detectFeatures() {
 // =========================================================
 //  Навигация
 // =========================================================
-const EXERCISE_VIEWS = ["study", "quiz", "scramble", "match", "write", "learn", "tasks", "result"];
-const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", tasks: "read", stats: "stats" };
+const EXERCISE_VIEWS = ["study", "quiz", "scramble", "match", "write", "learn", "pron", "tasks", "result"];
+const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", dialogue: "read", tasks: "read", stats: "stats" };
 
 function showView(name, title, showBack) {
   currentView = name;
-  const all = ["home", "decks", "packs", "deck", "read", "reader", "stats", ...EXERCISE_VIEWS];
+  const all = ["home", "decks", "packs", "deck", "read", "reader", "dialogue", "stats", ...EXERCISE_VIEWS];
   for (const v of all) el[v + "View"].classList.toggle("hidden", v !== name);
   if (name !== "match" && match.timer) { clearInterval(match.timer); match.timer = null; }
-  if (name !== "reader" && window.speechSynthesis) speechSynthesis.cancel();
+  if (name !== "reader" && name !== "dialogue" && window.speechSynthesis) speechSynthesis.cancel();
   el.viewTitle.textContent = title;
   el.backBtn.classList.toggle("hidden", !showBack);
-  const hideTabs = EXERCISE_VIEWS.includes(name) || name === "reader";
+  const hideTabs = EXERCISE_VIEWS.includes(name) || name === "reader" || name === "dialogue";
   el.tabbar.classList.toggle("hidden", hideTabs);
   if (VIEW_TAB[name]) currentTab = VIEW_TAB[name];
   el.tabbar.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.tab === currentTab));
@@ -328,8 +338,8 @@ function showView(name, title, showBack) {
 
 const inGame = () => EXERCISE_VIEWS.includes(currentView);
 el.backBtn.onclick = () => {
-  if (currentView === "tasks" || (currentView === "result" && lastResult.type === "tasks")) { goRead(); return; }
-  if (inGame()) { if (currentDeck && currentDeck.virtual) goHome(); else openDeck(currentDeck); }
+  if (currentView === "tasks" || currentView === "dialogue" || (currentView === "result" && (lastResult.type === "tasks" || lastResult.type === "dialogue"))) { goRead(); return; }
+  if (inGame()) { chain = null; if (currentDeck && currentDeck.virtual) goHome(); else openDeck(currentDeck); }
   else if (currentView === "deck" || currentView === "packs") goDecks();
   else if (currentView === "reader") goRead();
   else goHome();
@@ -479,11 +489,62 @@ function renderHome() {
     el.lastDeckCta.onclick = () => openDeck(last);
   }
   const read = lsGet("readStories", []);
-  el.homeReadSub.textContent = read.length ? `прочитано ${read.length} из ${window.STORIES.length}` : "короткие истории A1–A2";
+  el.homeReadSub.textContent = read.length ? `прочитано ${read.length} из ${window.STORIES.length}` : "рассказы A1–B1 и диалоги";
+
+  const p = lsGet("dailyPortion", null);
+  const doneToday = p && p.day === dayKey() && p.done;
+  el.portionSub.textContent = doneToday ? "✓ сегодня выполнена — можно взять ещё одну" : "знакомство › 4 варианта › написание › собери слово";
+
+  const got = lsGet("achievements", {});
+  el.homeAchSub.textContent = `${Object.keys(got).length} из ${ACHIEVEMENTS.length}`;
 }
 el.reviewCta.onclick = () => startReview();
+el.portionCta.onclick = () => startPortion();
+el.homeAchCta.onclick = () => goStats();
 el.homeReadCta.onclick = () => goRead();
 el.homePacksCta.onclick = () => goPacks();
+
+// ---------- Порция дня: 5 новых слов по цепочке упражнений ----------
+let chain = null;
+function pickPortion() {
+  const today = dayKey();
+  const saved = lsGet("dailyPortion", null);
+  if (saved && saved.day === today && !saved.done && saved.ids) {
+    const l = saved.ids.map((id) => allCards.find((c) => c.id === id)).filter(Boolean);
+    if (l.length >= 2) return l;
+  }
+  const unlearned = allCards.filter((c) => !isLearned(c));
+  const list = shuffle(unlearned.filter((c) => !c.correct_streak)).concat(shuffle(unlearned.filter((c) => c.correct_streak))).slice(0, 5);
+  lsSet("dailyPortion", { day: today, ids: list.map((c) => c.id), done: false });
+  return list;
+}
+function startPortion() {
+  const list = pickPortion();
+  if (list.length < 2) { toast("Невыученных слов почти нет — возьми подборку 📦"); return; }
+  currentDeck = { id: null, title: "Порция дня", virtual: true };
+  cards = list.slice();
+  chain = { stages: ["intro", "quiz", "write", "scramble"], i: 0, list, correct: 0, wrong: 0 };
+  runChainStage();
+}
+function runChainStage() {
+  const st = chain.stages[chain.i];
+  toast(["Шаг 1 из 4: знакомство", "Шаг 2 из 4: 4 варианта", "Шаг 3 из 4: написание", "Шаг 4 из 4: собери слово"][chain.i]);
+  if (st === "intro") startStudy(chain.list, { intro: true });
+  else if (st === "quiz") startQuiz(chain.list);
+  else if (st === "write") startWrite(chain.list);
+  else startScramble(chain.list);
+}
+function chainAdvance(correct, wrong) {
+  chain.correct += correct || 0; chain.wrong += wrong || 0;
+  chain.i++;
+  if (chain.i < chain.stages.length) runChainStage(); else finishChain();
+}
+function finishChain() {
+  const c = chain; chain = null;
+  const p = lsGet("dailyPortion", null); if (p) { p.done = true; lsSet("dailyPortion", p); }
+  lsSet("portionsDone", lsGet("portionsDone", 0) + 1);
+  showResult({ type: "portion", correct: c.correct, wrong: c.wrong, missed: [], sub: "Порция дня выполнена 📦", title: "Порция дня" });
+}
 
 // сквозное повторение по всем наборам
 function startReview() {
@@ -548,6 +609,7 @@ function renderStats() {
   let rev = 0, cor = 0; for (const d of Object.values(log)) { rev += d.reviewed; cor += d.correct; }
   el.statsAccuracy.textContent = rev ? Math.round((cor / rev) * 100) + "%" : "—";
 
+  renderAchievements();
   el.deckProgressList.innerHTML = decks.length ? "" : '<div class="empty" style="padding:8px;">Наборов пока нет</div>';
   for (const d of decks) {
     const s = deckStats(d.id);
@@ -555,6 +617,74 @@ function renderStats() {
     row.innerHTML = `<div class="dp-top"><b></b><span>${s.learned} / ${s.total}</span></div><div class="pbar"><div style="width:${s.total ? Math.round((s.learned / s.total) * 100) : 0}%"></div></div>`;
     row.querySelector("b").textContent = d.title;
     el.deckProgressList.appendChild(row);
+  }
+}
+
+// =========================================================
+//  ДОСТИЖЕНИЯ
+// =========================================================
+const ACHIEVEMENTS = [
+  { id: "first_learned", icon: "🌱", name: "Первое слово", test: (s) => s.learned >= 1 },
+  { id: "learned_25", icon: "📗", name: "25 слов", test: (s) => s.learned >= 25 },
+  { id: "learned_100", icon: "📚", name: "100 слов", test: (s) => s.learned >= 100 },
+  { id: "learned_250", icon: "🎓", name: "250 слов", test: (s) => s.learned >= 250 },
+  { id: "streak_3", icon: "🔥", name: "3 дня подряд", test: (s) => s.best >= 3 },
+  { id: "streak_7", icon: "🌋", name: "Неделя подряд", test: (s) => s.best >= 7 },
+  { id: "streak_30", icon: "🏅", name: "Месяц подряд", test: (s) => s.best >= 30 },
+  { id: "answers_500", icon: "⚡", name: "500 ответов", test: (s) => s.answers >= 500 },
+  { id: "story_first", icon: "📖", name: "Первый рассказ", test: (s) => s.stories >= 1 },
+  { id: "story_perfect", icon: "⭐", name: "5 из 5", test: (s) => s.perfectStory },
+  { id: "stories_all", icon: "🏆", name: "Все рассказы", test: (s) => s.stories >= window.STORIES.length },
+  { id: "dialogue_first", icon: "💬", name: "Первый диалог", test: (s) => s.dialogues >= 1 },
+  { id: "dialogues_all", icon: "🗣", name: "Все диалоги", test: (s) => s.dialogues >= window.DIALOGUES.length },
+  { id: "portion_first", icon: "📦", name: "Порция дня", test: (s) => s.portions >= 1 },
+  { id: "portions_7", icon: "🧺", name: "7 порций", test: (s) => s.portions >= 7 },
+  { id: "packs_3", icon: "🗂", name: "3 подборки", test: (s) => s.packs >= 3 },
+  { id: "dictation_first", icon: "🎧", name: "Диктант", test: (s) => s.dictations >= 1 },
+  { id: "pron_first", icon: "🎤", name: "Сказала вслух", test: (s) => s.prons >= 1 },
+  { id: "night_owl", icon: "🦉", name: "Сова", test: (s) => s.active && (s.hour >= 23 || s.hour < 4) },
+  { id: "early_bird", icon: "🐦", name: "Жаворонок", test: (s) => s.active && s.hour >= 5 && s.hour < 8 },
+];
+function achStats(active) {
+  const log = mergedLog(), st = computeStreaks(log);
+  let answers = 0; for (const d of Object.values(log)) answers += d.reviewed;
+  const scores = lsGet("storyScores", {});
+  const packTitles = new Set(window.PACKS.map((p) => `${p.icon} ${p.name}`));
+  return {
+    active: !!active,
+    learned: allCards.filter(isLearned).length,
+    best: st.best, answers,
+    stories: lsGet("readStories", []).length,
+    perfectStory: Object.values(scores).some((s) => s.total > 0 && s.best === s.total),
+    dialogues: Object.keys(lsGet("dialoguesDone", {})).length,
+    portions: lsGet("portionsDone", 0),
+    packs: decks.filter((d) => packTitles.has(d.title)).length,
+    dictations: lsGet("dictationsDone", 0),
+    prons: lsGet("pronsDone", 0),
+    hour: new Date().getHours(),
+  };
+}
+// active = true, когда вызвано после реального занятия (для «совы»/«жаворонка»)
+function checkAchievements(active) {
+  const got = lsGet("achievements", {});
+  const s = achStats(active);
+  const fresh = ACHIEVEMENTS.filter((a) => !got[a.id] && a.test(s));
+  if (!fresh.length) return;
+  for (const a of fresh) got[a.id] = new Date().toISOString();
+  lsSet("achievements", got);
+  fresh.forEach((a, i) => setTimeout(() => { toast(`🏆 ${a.name}`); sfx.learned(); confetti.burst(80); }, 500 + i * 1900));
+}
+function renderAchievements() {
+  const got = lsGet("achievements", {});
+  el.achCount.textContent = `${Object.keys(got).length} / ${ACHIEVEMENTS.length}`;
+  el.achGrid.innerHTML = "";
+  for (const a of ACHIEVEMENTS) {
+    const d = document.createElement("div");
+    d.className = "ach" + (got[a.id] ? "" : " locked");
+    d.innerHTML = `<div class="ach-ico">${a.icon}</div><div class="ach-name"></div>`;
+    d.querySelector(".ach-name").textContent = a.name;
+    if (got[a.id]) d.title = "Получено " + new Date(got[a.id]).toLocaleDateString("ru-RU");
+    el.achGrid.appendChild(d);
   }
 }
 
@@ -660,6 +790,7 @@ async function addPack(p) {
     localStorage.removeItem("cards_" + deck.id);
     toast(`+${data.length} ${plural(data.length, "слово", "слова", "слов")}`);
     confetti.burst(60);
+    checkAchievements(false);
   }
   openDeck(deck);
 }
@@ -678,6 +809,16 @@ function setScope(s) {
   el.scopeSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.scope === s));
 }
 el.scopeSeg.querySelectorAll(".seg-btn").forEach((btn) => { btn.onclick = () => { sfx.tap(); setScope(btn.dataset.scope); }; });
+
+// направление: EN › RU (узнавание), RU › EN (вспоминание) или вперемешку
+let direction = lsGet("direction", "en");
+function setDirection(d) {
+  direction = d; lsSet("direction", d);
+  el.dirSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.dir === d));
+}
+el.dirSeg.querySelectorAll(".seg-btn").forEach((b) => { b.onclick = () => { sfx.tap(); setDirection(b.dataset.dir); }; });
+setDirection(direction);
+function frontIsEn() { return direction === "mix" ? Math.random() < 0.5 : direction === "en"; }
 
 async function openDeck(deck) {
   currentDeck = deck;
@@ -934,38 +1075,47 @@ function gradeCard(card, correct) {
 // =========================================================
 el.studyBtn.onclick = () => startStudy();
 
-function startStudy(override) {
+function startStudy(override, opts) {
   const list = override || studyList();
   if (!list.length) { toast(scope === "review" ? "Повторять пока нечего 🎉" : "Незнакомых слов нет 🎉 Переключись на «Все»"); return; }
-  session = { list: shuffle(list), index: 0, flipped: false, correct: 0, missed: [] };
+  const intro = !!(opts && opts.intro);
+  session = { list: intro ? list.slice() : shuffle(list), index: 0, flipped: false, correct: 0, missed: [], intro, front: "en" };
+  el.studyChoices.classList.toggle("hidden", intro);
+  el.introNext.classList.toggle("hidden", !intro);
+  el.flashSub.classList.toggle("hidden", !intro);
+  el.flashHint.textContent = intro ? "запомни слово и перевод" : "нажми на карточку, чтобы перевернуть";
   showView("study", currentDeck.title, true);
   showCard();
 }
 
+function renderFlash() {
+  const card = session.list[session.index];
+  const showEn = session.flipped ? session.front !== "en" : session.front === "en";
+  el.flashSide.textContent = showEn ? "English" : "Перевод";
+  el.flashText.textContent = showEn ? card.term : card.definition;
+  if (showEn) speak(card.term);
+}
 function showCard() {
   const card = session.list[session.index];
   if (!card) return;
   session.flipped = false;
-  el.flashSide.textContent = "English";
-  el.flashText.textContent = card.term;
+  session.front = session.intro ? "en" : (frontIsEn() ? "en" : "ru");
+  if (session.intro) el.flashSub.textContent = card.definition;
+  renderFlash();
   el.studyProgress.textContent = `${session.index + 1} из ${session.list.length}`;
   pop(el.flashcard);
-  speak(card.term);
 }
 
 el.flashcard.onclick = (e) => {
-  if (e.target === el.speakBtn) return;
-  const card = session.list[session.index];
-  if (!card) return;
+  if (e.target === el.speakBtn || session.intro) return;
+  if (!session.list[session.index]) return;
   session.flipped = !session.flipped;
-  if (session.flipped) {
-    el.flashSide.textContent = "Перевод";
-    el.flashText.textContent = card.definition;
-  } else {
-    el.flashSide.textContent = "English";
-    el.flashText.textContent = card.term;
-    speak(card.term);
-  }
+  renderFlash();
+};
+el.introNext.onclick = () => {
+  sfx.tap();
+  session.index++;
+  if (session.index >= session.list.length) finishStudy(); else showCard();
 };
 el.speakBtn.onclick = (e) => { e.stopPropagation(); const card = session.list[session.index]; if (card) speak(card.term); };
 el.quizSpeak.onclick = () => { const card = quiz.list[quiz.index]; if (card) speak(card.term); };
@@ -983,6 +1133,7 @@ function answer(known) {
   else showCard();
 }
 function finishStudy() {
+  if (chain) { chainAdvance(session.intro ? 0 : session.correct, session.intro ? 0 : session.missed.length); return; }
   renderCards();
   showResult({ type: "study", correct: session.correct, wrong: session.missed.length, missed: session.missed });
 }
@@ -1004,12 +1155,15 @@ function startQuiz(override) {
 function showQuestion() {
   quiz.answered = false;
   const card = quiz.list[quiz.index];
-  el.quizWord.textContent = card.term;
+  quiz.askEn = frontIsEn();
+  const key = quiz.askEn ? "definition" : "term";
+  el.quizWord.textContent = quiz.askEn ? card.term : card.definition;
+  el.quizPrompt.querySelector(".flash-side").textContent = quiz.askEn ? "Выбери перевод" : "Выбери английское слово";
   el.quizProgress.textContent = `${quiz.index + 1} из ${quiz.list.length}`;
   pop(el.quizPrompt);
-  speak(card.term);
-  const others = cards.filter((c) => c.id !== card.id && c.definition !== card.definition).map((c) => c.definition);
-  const options = shuffle([card.definition, ...shuffle([...new Set(others)]).slice(0, 3)]);
+  if (quiz.askEn) speak(card.term);
+  const others = cards.filter((c) => c.id !== card.id && c[key] !== card[key]).map((c) => c[key]);
+  const options = shuffle([card[key], ...shuffle([...new Set(others)]).slice(0, 3)]);
   el.quizOptions.innerHTML = "";
   for (const opt of options) {
     const b = document.createElement("button");
@@ -1022,9 +1176,11 @@ function showQuestion() {
 function chooseOption(btn, chosen, card) {
   if (quiz.answered) return;
   quiz.answered = true;
-  const correct = chosen === card.definition;
-  el.quizOptions.querySelectorAll(".opt-btn").forEach((b) => { b.disabled = true; if (b.textContent === card.definition) b.classList.add("correct"); });
+  const right = quiz.askEn ? card.definition : card.term;
+  const correct = chosen === right;
+  el.quizOptions.querySelectorAll(".opt-btn").forEach((b) => { b.disabled = true; if (b.textContent === right) b.classList.add("correct"); });
   if (!correct) btn.classList.add("wrong");
+  if (!quiz.askEn) speak(card.term);
   gradeCard(card, correct);
   if (correct) quiz.score++; else quiz.missed.push(card);
   setTimeout(() => {
@@ -1033,6 +1189,7 @@ function chooseOption(btn, chosen, card) {
   }, correct ? 750 : 1300);
 }
 function finishQuiz() {
+  if (chain) { chainAdvance(quiz.score, quiz.missed.length); return; }
   renderCards();
   showResult({ type: "quiz", correct: quiz.score, wrong: quiz.missed.length, missed: quiz.missed });
 }
@@ -1042,18 +1199,23 @@ function finishQuiz() {
 // =========================================================
 function normAnswer(s) { return s.trim().toLowerCase().replace(/\s+/g, " "); }
 el.writeBtn.onclick = () => startWrite();
+el.dictationBtn.onclick = () => startWrite(undefined, true);
+el.writeSpeak.onclick = () => { const c = write.list[write.index]; if (c) speak(c.term); };
 
-function startWrite(override) {
+function startWrite(override, dictation) {
   const list = override || studyList();
   if (!list.length) { toast("Нет слов для игры"); return; }
-  write = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [] };
+  write = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], dictation: !!dictation };
+  el.writeSide.textContent = dictation ? "Послушай и напиши" : "Напиши по-английски";
+  el.writeSpeak.classList.toggle("hidden", !dictation);
   showView("write", currentDeck.title, true);
   showWrite();
 }
 function showWrite() {
   write.locked = false;
   const card = write.list[write.index];
-  el.writeDef.textContent = card.definition;
+  el.writeDef.textContent = write.dictation ? "🎧" : card.definition;
+  if (write.dictation) setTimeout(() => speak(card.term), 250);
   el.writeProgress.textContent = `${write.index + 1} из ${write.list.length}`;
   el.writeInput.value = ""; el.writeInput.disabled = false;
   el.writeFeedback.classList.add("hidden"); el.writeFeedback.textContent = ""; el.writeFeedback.style.color = "";
@@ -1085,8 +1247,107 @@ el.writeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") checkW
 el.writeOverride.onclick = () => { const card = write.list[write.index]; gradeCard(card, true); write.score++; el.writeOverride.classList.add("hidden"); writeAdvance(); };
 el.writeNext.onclick = () => { const card = write.list[write.index]; gradeCard(card, false); write.missed.push(card); writeAdvance(); };
 function finishWrite() {
+  if (chain) { chainAdvance(write.score, write.missed.length); return; }
+  if (write.dictation) lsSet("dictationsDone", lsGet("dictationsDone", 0) + 1);
   renderCards();
-  showResult({ type: "write", correct: write.score, wrong: write.missed.length, missed: write.missed });
+  showResult({ type: "write", correct: write.score, wrong: write.missed.length, missed: write.missed, dictation: write.dictation });
+}
+
+// =========================================================
+//  PRONUNCIATION (произношение через распознавание речи)
+// =========================================================
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let pron = { list: [], index: 0, score: 0, locked: false, missed: [], rec: null };
+el.pronBtn.onclick = () => startPron();
+
+function startPron(override) {
+  if (!SR) { toast("Распознавание речи не поддерживается в этом браузере"); return; }
+  const list = override || studyList();
+  if (!list.length) { toast("Нет слов для игры"); return; }
+  pron = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], rec: null };
+  showView("pron", currentDeck.title, true);
+  showPron();
+}
+function showPron() {
+  const card = pron.list[pron.index];
+  pron.locked = false;
+  el.pronWord.textContent = card.term;
+  el.pronDef.textContent = card.definition;
+  el.pronProgress.textContent = `${pron.index + 1} из ${pron.list.length}`;
+  el.pronStatus.classList.add("hidden"); el.pronStatus.textContent = ""; el.pronStatus.style.color = "";
+  el.pronOverride.classList.add("hidden"); el.pronNext.classList.add("hidden");
+  setMic(false);
+  pop(el.pronPrompt);
+  speak(card.term);
+}
+function setMic(listening) {
+  el.pronMic.disabled = false;
+  el.pronMic.classList.toggle("listening", listening);
+  el.pronMic.querySelector(".mic-label").textContent = listening ? "Слушаю…" : "Нажми и говори";
+}
+function normSpeech(s) { return s.toLowerCase().replace(/[^\p{L}\s']/gu, "").replace(/\s+/g, " ").trim(); }
+function editDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+}
+function speechMatches(alts, target) {
+  const tol = target.length <= 4 ? 0 : target.length <= 8 ? 1 : 2;
+  return alts.some((a) => a === target || a.split(" ").includes(target) || a.includes(target) || editDistance(a, target) <= tol);
+}
+el.pronMic.onclick = () => {
+  if (pron.locked) return;
+  const card = pron.list[pron.index];
+  if (pron.rec) { try { pron.rec.stop(); } catch (_) {} pron.rec = null; setMic(false); return; }
+  let rec; try { rec = new SR(); } catch (_) { toast("Микрофон недоступен"); return; }
+  pron.rec = rec;
+  rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 5;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  setMic(true);
+  el.pronStatus.classList.add("hidden");
+  rec.onresult = (e) => {
+    const alts = Array.from(e.results[0]).map((r) => normSpeech(r.transcript)).filter(Boolean);
+    const ok = speechMatches(alts, normSpeech(card.term));
+    pronGrade(ok, alts[0] || "");
+  };
+  rec.onerror = (e) => {
+    setMic(false); pron.rec = null;
+    el.pronStatus.textContent = e.error === "not-allowed" || e.error === "service-not-allowed"
+      ? "Нет доступа к микрофону — разреши его в настройках браузера"
+      : "Не расслышала. Нажми и скажи ещё раз";
+    el.pronStatus.style.color = "var(--danger)";
+    el.pronStatus.classList.remove("hidden");
+  };
+  rec.onend = () => { pron.rec = null; setMic(false); };
+  try { rec.start(); } catch (_) { setMic(false); pron.rec = null; toast("Не удалось включить микрофон"); }
+};
+function pronGrade(ok, heard) {
+  const card = pron.list[pron.index];
+  el.pronStatus.classList.remove("hidden");
+  if (ok) {
+    pron.locked = true; el.pronMic.disabled = true;
+    gradeCard(card, true); pron.score++;
+    el.pronStatus.textContent = `Отлично! Я услышала: «${heard}»`;
+    el.pronStatus.style.color = "var(--ok)";
+    setTimeout(pronAdvance, 1000);
+  } else {
+    el.pronStatus.textContent = heard ? `Я услышала: «${heard}». Попробуй ещё раз` : "Не расслышала. Попробуй ещё раз";
+    el.pronStatus.style.color = "var(--danger)";
+    el.pronOverride.classList.remove("hidden"); el.pronNext.classList.remove("hidden");
+    sfx.wrong();
+  }
+}
+function pronAdvance() { pron.index++; if (pron.index >= pron.list.length) finishPron(); else showPron(); }
+el.pronSpeak.onclick = () => { const c = pron.list[pron.index]; if (c) speak(c.term); };
+el.pronOverride.onclick = () => { const c = pron.list[pron.index]; pron.locked = true; gradeCard(c, true); pron.score++; pronAdvance(); };
+el.pronNext.onclick = () => { const c = pron.list[pron.index]; pron.locked = true; gradeCard(c, false); pron.missed.push(c); pronAdvance(); };
+function finishPron() {
+  if (pron.rec) { try { pron.rec.stop(); } catch (_) {} pron.rec = null; }
+  lsSet("pronsDone", lsGet("pronsDone", 0) + 1);
+  renderCards();
+  showResult({ type: "pron", correct: pron.score, wrong: pron.missed.length, missed: pron.missed });
 }
 
 // =========================================================
@@ -1106,17 +1367,19 @@ function showLearn() {
   learn.locked = false;
   const card = learn.list[learn.index];
   learn.mode = card.correct_streak >= 1 ? "write" : "choice";
-  el.learnWord.textContent = learn.mode === "choice" ? card.term : card.definition;
-  el.learnSide.textContent = learn.mode === "choice" ? "Выбери перевод" : "Напиши по-английски";
+  learn.askEn = learn.mode === "choice" ? frontIsEn() : true;
+  el.learnWord.textContent = learn.mode === "choice" ? (learn.askEn ? card.term : card.definition) : card.definition;
+  el.learnSide.textContent = learn.mode === "choice" ? (learn.askEn ? "Выбери перевод" : "Выбери английское слово") : "Напиши по-английски";
   el.learnProgress.textContent = `${learn.index + 1} из ${learn.list.length}`;
   el.learnFeedback.classList.add("hidden"); el.learnFeedback.textContent = ""; el.learnFeedback.style.color = "";
   el.learnOverride.classList.add("hidden"); el.learnNext.classList.add("hidden");
   pop(el.learnPrompt);
   if (learn.mode === "choice") {
     el.learnInput.classList.add("hidden"); el.learnCheck.classList.add("hidden"); el.learnOptions.classList.remove("hidden");
-    speak(card.term);
-    const others = cards.filter((c) => c.id !== card.id && c.definition !== card.definition).map((c) => c.definition);
-    const options = shuffle([card.definition, ...shuffle([...new Set(others)]).slice(0, 3)]);
+    if (learn.askEn) speak(card.term);
+    const key = learn.askEn ? "definition" : "term";
+    const others = cards.filter((c) => c.id !== card.id && c[key] !== card[key]).map((c) => c[key]);
+    const options = shuffle([card[key], ...shuffle([...new Set(others)]).slice(0, 3)]);
     el.learnOptions.innerHTML = "";
     for (const opt of options) {
       const b = document.createElement("button");
@@ -1134,9 +1397,11 @@ function learnGrade(correct, card) { gradeCard(card, correct); if (correct) lear
 function learnChoose(btn, chosen, card) {
   if (learn.locked) return;
   learn.locked = true;
-  const correct = chosen === card.definition;
-  el.learnOptions.querySelectorAll(".opt-btn").forEach((b) => { b.disabled = true; if (b.textContent === card.definition) b.classList.add("correct"); });
+  const right = learn.askEn ? card.definition : card.term;
+  const correct = chosen === right;
+  el.learnOptions.querySelectorAll(".opt-btn").forEach((b) => { b.disabled = true; if (b.textContent === right) b.classList.add("correct"); });
   if (!correct) btn.classList.add("wrong");
+  if (!learn.askEn) speak(card.term);
   learnGrade(correct, card);
   setTimeout(learnAdvance, correct ? 750 : 1300);
 }
@@ -1228,6 +1493,7 @@ function checkScramble() {
   else { el.scrambleNext.classList.remove("hidden"); el.scrambleNext.onclick = () => { el.scrambleNext.classList.add("hidden"); advance(); }; }
 }
 function finishScramble() {
+  if (chain) { chainAdvance(scramble.score, scramble.missed.length); return; }
   renderCards();
   showResult({ type: "scramble", correct: scramble.score, wrong: scramble.missed.length, missed: scramble.missed });
 }
@@ -1299,9 +1565,9 @@ function dedupeCards(arr) {
   for (const c of arr) { if (!seen.has(c.id)) { seen.add(c.id); out.push(c); } }
   return out;
 }
-function showResult({ type, correct, wrong, missed, sub, title }) {
-  const isTasks = type === "tasks";
-  lastResult = { type, missed: isTasks ? (missed || []).slice() : dedupeCards(missed || []) };
+function showResult({ type, correct, wrong, missed, sub, title, dictation }) {
+  const readType = type === "tasks" || type === "dialogue";
+  lastResult = { type, dictation: !!dictation, missed: readType ? (missed || []).slice() : dedupeCards(missed || []) };
   const perfect = wrong === 0;
   el.resultEmoji.textContent = perfect ? "🎉" : "💪";
   el.resultStats.textContent = `${correct} верно · ${wrong} ${wrong === 1 ? "ошибка" : "ошибок"}`;
@@ -1310,9 +1576,10 @@ function showResult({ type, correct, wrong, missed, sub, title }) {
   const canRework = m > 0 && !(type === "match" && m < 2);
   el.reworkBtn.classList.toggle("hidden", !canRework);
   el.reworkBtn.textContent = `💪 Работа над ошибками (${m})`;
-  el.resultBackBtn.textContent = isTasks ? "К рассказам" : (currentDeck && currentDeck.virtual ? "На главную" : "Ко всем заданиям");
+  el.resultBackBtn.textContent = readType ? "К рассказам" : (currentDeck && currentDeck.virtual ? "На главную" : "Ко всем заданиям");
   showView("result", title || currentDeck.title, true);
   if (perfect && correct >= 2) { confetti.burst(140); sfx.finish(); } else if (correct > 0) { sfx.finish(); }
+  checkAchievements(true);
 }
 el.reworkBtn.onclick = () => {
   const list = lastResult.missed.slice();
@@ -1322,11 +1589,12 @@ el.reworkBtn.onclick = () => {
   else if (lastResult.type === "quiz") startQuiz(list);
   else if (lastResult.type === "scramble") startScramble(list);
   else if (lastResult.type === "match") startMatch(list);
-  else if (lastResult.type === "write") startWrite(list);
+  else if (lastResult.type === "write") startWrite(list, lastResult.dictation);
   else if (lastResult.type === "learn") startLearn(list);
+  else if (lastResult.type === "pron") startPron(list);
 };
 el.resultBackBtn.onclick = () => {
-  if (lastResult.type === "tasks") goRead();
+  if (lastResult.type === "tasks" || lastResult.type === "dialogue") goRead();
   else if (currentDeck && currentDeck.virtual) goHome();
   else openDeck(currentDeck);
 };
@@ -1337,11 +1605,108 @@ el.resultBackBtn.onclick = () => {
 let currentStory = null;
 let wsTerm = "";
 
+let readMode = lsGet("readMode", "stories");
+function setReadMode(m) {
+  readMode = m; lsSet("readMode", m);
+  el.readSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.read === m));
+  el.storiesList.classList.toggle("hidden", m !== "stories");
+  el.dialoguesList.classList.toggle("hidden", m !== "dialogues");
+  el.readHint.textContent = m === "stories"
+    ? "Нажми на любое слово в рассказе — увидишь перевод и сможешь добавить его в набор."
+    : "Выбирай, что ответить собеседнику. Слова в репликах тоже можно нажимать.";
+}
+el.readSeg.querySelectorAll(".seg-btn").forEach((b) => { b.onclick = () => { sfx.tap(); setReadMode(b.dataset.read); }; });
+
 async function goRead() {
   showView("read", "Читать", false);
   renderStories();
+  renderDialogues();
+  setReadMode(readMode);
   await Promise.all([loadDecksData(), loadAllCards()]);
 }
+
+// делит текст на слова-«кнопки» и остальное; известные слова подчёркивает
+function fillTokens(container, text, known) {
+  for (const m of text.matchAll(/(\p{L}+(?:'\p{L}+)?)|([^\p{L}]+)/gu)) {
+    if (m[1]) {
+      const span = document.createElement("span"); span.className = "w"; span.textContent = m[1];
+      const r = lookup(m[1]);
+      if (known && (known.has(m[1].toLowerCase()) || (r && known.has(r.base)))) span.classList.add("known");
+      container.appendChild(span);
+    } else container.appendChild(document.createTextNode(m[2]));
+  }
+}
+
+// ---------- Диалоги ----------
+let dlg = { d: null, node: null, steps: 0, bad: 0 };
+function renderDialogues() {
+  const done = lsGet("dialoguesDone", {});
+  el.dialoguesList.innerHTML = "";
+  for (const d of window.DIALOGUES) {
+    const n = Object.keys(d.nodes).length;
+    const item = document.createElement("div"); item.className = "list-item";
+    item.innerHTML = `
+      <div class="li-icon">${done[d.id] ? "✅" : d.icon}</div>
+      <div class="grow"><div class="li-title"></div><div class="li-sub"></div></div>
+      <span class="lvl ${d.level.toLowerCase()}">${d.level}</span>`;
+    item.querySelector(".li-title").textContent = d.title;
+    item.querySelector(".li-sub").textContent = `${d.who} · ${n} ${plural(n, "реплика", "реплики", "реплик")}${done[d.id] ? " · пройден" : ""}`;
+    item.onclick = () => openDialogue(d);
+    el.dialoguesList.appendChild(item);
+  }
+}
+function openDialogue(d) {
+  dlg = { d, node: d.start, steps: 0, bad: 0 };
+  showView("dialogue", d.title, true);
+  el.chatWho.textContent = `${d.icon} Собеседник: ${d.who}`;
+  el.chatLog.innerHTML = "";
+  renderDialogueNode();
+}
+function chatBubble(text, tr, cls) {
+  const b = document.createElement("div"); b.className = "bubble " + cls;
+  fillTokens(b, text, knownTerms());
+  const t = document.createElement("span"); t.className = "tr"; t.textContent = tr; b.appendChild(t);
+  el.chatLog.appendChild(b);
+  return b;
+}
+function renderDialogueNode() {
+  const n = dlg.d.nodes[dlg.node];
+  chatBubble(n.npc, n.tr, "npc");
+  speak(n.npc);
+  el.chatOptions.innerHTML = "";
+  if (n.end) {
+    const b = document.createElement("button"); b.className = "btn btn-primary"; b.textContent = "Завершить диалог ›";
+    b.onclick = finishDialogue; el.chatOptions.appendChild(b);
+  } else {
+    for (const o of n.options) {
+      const b = document.createElement("button"); b.className = "chat-opt";
+      const main = document.createElement("span"); main.textContent = o.text;
+      const tr = document.createElement("span"); tr.className = "tr"; tr.textContent = o.tr;
+      b.append(main, tr);
+      b.onclick = () => chooseDialogueOption(o);
+      el.chatOptions.appendChild(b);
+    }
+  }
+  setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50);
+}
+function chooseDialogueOption(o) {
+  dlg.steps++;
+  if (o.bad) { dlg.bad++; sfx.wrong(); } else { sfx.tap(); }
+  chatBubble(o.text, o.tr, "you" + (o.bad ? " bad" : ""));
+  logStudy(1, o.bad ? 0 : 1, 0);
+  dlg.node = o.next;
+  setTimeout(renderDialogueNode, 350);
+}
+function finishDialogue() {
+  const done = lsGet("dialoguesDone", {}); done[dlg.d.id] = true; lsSet("dialoguesDone", done);
+  showResult({ type: "dialogue", correct: dlg.steps - dlg.bad, wrong: dlg.bad, missed: [], sub: dlg.d.title, title: dlg.d.title });
+}
+el.chatLog.addEventListener("click", (e) => {
+  const w = e.target.closest(".w"); if (!w) return;
+  el.chatLog.querySelectorAll(".w.hl").forEach((x) => x.classList.remove("hl"));
+  w.classList.add("hl");
+  openWordSheet(w.textContent);
+});
 function renderStories() {
   const read = new Set(lsGet("readStories", []));
   const scores = lsGet("storyScores", {});
@@ -1371,14 +1736,7 @@ function openStory(s) {
   el.readerText.innerHTML = "";
   for (const para of s.text.split(/\n\s*\n/)) {
     const p = document.createElement("p");
-    for (const m of para.matchAll(/(\p{L}+(?:'\p{L}+)?)|([^\p{L}]+)/gu)) {
-      if (m[1]) {
-        const span = document.createElement("span"); span.className = "w"; span.textContent = m[1];
-        const r = lookup(m[1]);
-        if (known.has(m[1].toLowerCase()) || (r && known.has(r.base))) span.classList.add("known");
-        p.appendChild(span);
-      } else p.appendChild(document.createTextNode(m[2]));
-    }
+    fillTokens(p, para, known);
     el.readerText.appendChild(p);
   }
   const sc = lsGet("storyScores", {})[s.id];
@@ -1478,6 +1836,8 @@ function lookup(raw) {
   if (w.endsWith("ed")) { c.push(w.slice(0, -2)); c.push(w.slice(0, -1)); if (w.length > 4 && w[w.length - 3] === w[w.length - 4]) c.push(w.slice(0, -3)); }
   if (w.endsWith("ing")) { c.push(w.slice(0, -3)); c.push(w.slice(0, -3) + "e"); if (w.length > 5 && w[w.length - 4] === w[w.length - 5]) c.push(w.slice(0, -4)); }
   if (w.endsWith("ly")) c.push(w.slice(0, -2));
+  if (w.endsWith("ier")) c.push(w.slice(0, -3) + "y");
+  if (w.endsWith("iest")) c.push(w.slice(0, -4) + "y");
   if (w.endsWith("er")) { c.push(w.slice(0, -2)); c.push(w.slice(0, -1)); }
   if (w.endsWith("est")) { c.push(w.slice(0, -3)); c.push(w.slice(0, -2)); }
   for (const k of c) { r = tryKey(k); if (r) return r; }
@@ -1539,7 +1899,7 @@ async function addToDeck(deck, term, definition) {
     closeSheets();
     toast(`«${term}» › ${deck.title}`);
     sfx.correct(); confetti.burst(30);
-    el.readerText.querySelectorAll(".w").forEach((s) => { const r = lookup(s.textContent); if (s.textContent.toLowerCase() === term || (r && r.base === term)) s.classList.add("known"); });
+    document.querySelectorAll("#readerText .w, #chatLog .w").forEach((s) => { const r = lookup(s.textContent); if (s.textContent.toLowerCase() === term || (r && r.base === term)) s.classList.add("known"); });
   } catch (_) { toast("Нет связи, попробуй ещё раз"); }
 }
 el.pickCloseBtn.onclick = closeSheets;

@@ -1,6 +1,6 @@
-const CACHE = "wordcards-v4";
+const CACHE = "wordcards-v5";
 const ASSETS = [
-  "./", "./index.html", "./app.js", "./packs.js", "./stories.js",
+  "./", "./index.html", "./app.js", "./packs.js", "./stories.js", "./dialogues.js",
   "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png",
 ];
 

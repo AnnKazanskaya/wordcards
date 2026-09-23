@@ -409,6 +409,46 @@
     .w { cursor: pointer; border-radius: 4px; padding: 0 1px; transition: background .12s; }
     .w:hover, .w.hl { background: var(--accent-soft); color: var(--accent); }
     .w.known { text-decoration: underline dotted var(--ok); text-underline-offset: 3px; }
+    .flash-sub { font-size: 18px; color: var(--muted); text-align: center; margin-top: -6px; }
+
+    /* произношение */
+    .mic-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      margin: 0 auto; width: 132px; height: 132px; border-radius: 50%;
+      background: var(--accent); color: #fff; border: none; cursor: pointer;
+      box-shadow: 0 6px 24px rgba(79,70,229,.35); transition: transform .1s, background .2s;
+    }
+    .mic-btn:active { transform: scale(.96); }
+    .mic-btn .mic-ico { font-size: 40px; line-height: 1; }
+    .mic-btn .mic-label { font-size: 12px; font-weight: 600; opacity: .9; }
+    .mic-btn.listening { background: var(--danger); animation: mic-pulse 1s infinite; }
+    .mic-btn:disabled { opacity: .5; cursor: not-allowed; animation: none; }
+    @keyframes mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,72,77,.45); } 50% { box-shadow: 0 0 0 18px rgba(229,72,77,0); } }
+
+    /* диалоги */
+    .chat-who { font-size: 13px; color: var(--muted); text-align: center; }
+    .chat-log { display: flex; flex-direction: column; gap: 10px; }
+    .bubble { max-width: 86%; padding: 12px 14px; border-radius: 16px; font-size: 17px; line-height: 1.5; animation: pop-in .25s; }
+    .bubble .tr { display: block; font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .bubble.npc { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+    .bubble.you { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+    .bubble.you .tr { color: rgba(255,255,255,.75); }
+    .bubble.you .w:hover, .bubble.you .w.hl { background: rgba(255,255,255,.2); color: #fff; }
+    .bubble.bad { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+    .bubble.bad .tr { color: var(--danger); opacity: .8; }
+    .chat-options { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .chat-opt { text-align: left; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); cursor: pointer; font-size: 16px; font-weight: 600; line-height: 1.4; }
+    .chat-opt:hover { border-color: var(--accent); }
+    .chat-opt .tr { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+
+    /* достижения */
+    .ach-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .ach { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+    .ach .ach-ico { width: 56px; height: 56px; border-radius: 16px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 26px; }
+    .ach .ach-name { font-size: 11px; font-weight: 600; line-height: 1.2; }
+    .ach.locked .ach-ico { background: var(--line); filter: grayscale(1); opacity: .45; }
+    .ach.locked .ach-name { color: var(--muted); }
+
     .task-text { font-size: 21px; font-weight: 600; text-align: center; line-height: 1.45; margin-top: 10px; }
     .task-feedback { font-size: 15px; color: var(--muted); text-align: center; padding: 4px 8px; line-height: 1.45; }
     .task-feedback b { color: var(--ok); }
@@ -524,6 +564,12 @@
           <div class="stat-tile acc"><div class="n" id="homeInProgress">0</div><div class="l">в процессе</div></div>
         </div>
 
+        <button class="cta" id="portionCta">
+          <span class="ico">📦</span>
+          <span class="grow"><div class="t">Порция дня: 5 новых слов</div><div class="s" id="portionSub">знакомство › 4 варианта › написание › собери слово</div></span>
+          <span class="arrow">›</span>
+        </button>
+
         <div class="section-title">Продолжить</div>
         <button class="cta hidden" id="lastDeckCta">
           <span class="ico">📚</span>
@@ -536,8 +582,13 @@
           <span class="arrow">›</span>
         </button>
         <button class="cta" id="homePacksCta">
-          <span class="ico">📦</span>
+          <span class="ico">🗂</span>
           <span class="grow"><div class="t">Готовые подборки</div><div class="s">добавить набор по теме</div></span>
+          <span class="arrow">›</span>
+        </button>
+        <button class="cta" id="homeAchCta">
+          <span class="ico">🏆</span>
+          <span class="grow"><div class="t">Достижения</div><div class="s" id="homeAchSub">0 из 0</div></span>
           <span class="arrow">›</span>
         </button>
         <div style="text-align:center;margin-top:18px;"><button class="link-btn" id="logoutBtn" style="color:var(--muted);">Выйти из аккаунта</button></div>
@@ -569,6 +620,11 @@
             <button class="seg-btn" data-scope="unknown">Незнакомые</button>
             <button class="seg-btn" data-scope="review">Повторить</button>
           </div>
+          <div class="seg" id="dirSeg" style="margin-top:8px;">
+            <button class="seg-btn active" data-dir="en">EN › RU</button>
+            <button class="seg-btn" data-dir="ru">RU › EN</button>
+            <button class="seg-btn" data-dir="mix">Вперемешку</button>
+          </div>
           <div class="games-grid" style="margin-top:10px;">
             <button class="btn btn-primary" id="learnBtn">🧠 Учить</button>
             <button class="btn btn-ghost" id="studyBtn">▶︎ Карточки</button>
@@ -576,6 +632,8 @@
             <button class="btn btn-ghost" id="writeBtn">⌨️ Написание</button>
             <button class="btn btn-ghost" id="scrambleBtn">🔤 Собери слово</button>
             <button class="btn btn-ghost" id="matchBtn">⚡ Подбор</button>
+            <button class="btn btn-ghost" id="dictationBtn">🎧 Диктант</button>
+            <button class="btn btn-ghost" id="pronBtn">🎤 Произношение</button>
           </div>
         </div>
         <div id="cardsList"></div>
@@ -592,10 +650,23 @@
         </div>
       </div>
 
-      <!-- READ VIEW (list of stories) -->
+      <!-- READ VIEW (stories + dialogues) -->
       <div class="view hidden" id="readView">
-        <div class="hint" style="font-size:13px;color:var(--muted);">Нажми на любое слово в рассказе — увидишь перевод и сможешь добавить его в набор.</div>
+        <div class="seg" id="readSeg">
+          <button class="seg-btn active" data-read="stories">📖 Рассказы</button>
+          <button class="seg-btn" data-read="dialogues">💬 Диалоги</button>
+        </div>
+        <div class="hint" style="font-size:13px;color:var(--muted);" id="readHint">Нажми на любое слово в рассказе — увидишь перевод и сможешь добавить его в набор.</div>
         <div id="storiesList"></div>
+        <div id="dialoguesList" class="hidden"></div>
+      </div>
+
+      <!-- DIALOGUE VIEW -->
+      <div class="view hidden" id="dialogueView">
+        <div class="chat-who" id="chatWho"></div>
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-options" id="chatOptions"></div>
+        <div class="reader-hint">нажми на слово в реплике — увидишь перевод</div>
       </div>
 
       <!-- READER VIEW -->
@@ -649,6 +720,10 @@
           <div class="stat-tile"><div class="n" id="statsAccuracy">—</div><div class="l">точность</div></div>
         </div>
         <div class="panel">
+          <h3>Достижения <span id="achCount" style="color:var(--muted);font-weight:600;"></span></h3>
+          <div class="ach-grid" id="achGrid"></div>
+        </div>
+        <div class="panel">
           <h3>Прогресс по наборам</h3>
           <div class="deck-progress" id="deckProgressList"></div>
         </div>
@@ -660,13 +735,15 @@
           <div class="flashcard" id="flashcard">
             <span class="flash-side" id="flashSide">English</span>
             <div class="flash-text" id="flashText">—</div>
+            <div class="flash-sub hidden" id="flashSub"></div>
             <button class="speak-btn" id="speakBtn">🔊</button>
-            <div class="flash-hint">нажми на карточку, чтобы перевернуть</div>
+            <div class="flash-hint" id="flashHint">нажми на карточку, чтобы перевернуть</div>
           </div>
-          <div class="row-2">
+          <div class="row-2" id="studyChoices">
             <button class="btn btn-ghost" id="dontKnowBtn">Не знаю</button>
             <button class="btn btn-primary" id="knowBtn">Знаю ✓</button>
           </div>
+          <button class="btn btn-primary hidden" id="introNext">Дальше ›</button>
           <div class="study-progress" id="studyProgress"></div>
         </div>
       </div>
@@ -713,8 +790,9 @@
       <div class="view hidden" id="writeView">
         <div class="study-wrap">
           <div class="quiz-prompt" id="writePrompt">
-            <span class="flash-side">Напиши по-английски</span>
+            <span class="flash-side" id="writeSide">Напиши по-английски</span>
             <div class="quiz-word" id="writeDef">—</div>
+            <button class="speak-btn hidden" id="writeSpeak" style="width:64px;height:64px;font-size:28px;">🔊</button>
           </div>
           <input id="writeInput" placeholder="english word" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
           <div class="correct-spelling hidden" id="writeFeedback"></div>
@@ -722,6 +800,23 @@
           <button class="btn btn-ghost hidden" id="writeOverride">Всё равно засчитать ✓</button>
           <button class="btn btn-primary hidden" id="writeNext">Дальше ›</button>
           <div class="study-progress" id="writeProgress"></div>
+        </div>
+      </div>
+
+      <!-- PRONUNCIATION VIEW (произношение) -->
+      <div class="view hidden" id="pronView">
+        <div class="study-wrap">
+          <div class="quiz-prompt" id="pronPrompt">
+            <span class="flash-side">Скажи это слово</span>
+            <div class="quiz-word" id="pronWord">—</div>
+            <div class="flash-sub" id="pronDef"></div>
+            <button class="speak-btn" id="pronSpeak">🔊</button>
+          </div>
+          <button class="mic-btn" id="pronMic"><span class="mic-ico">🎤</span><span class="mic-label">Нажми и говори</span></button>
+          <div class="correct-spelling hidden" id="pronStatus"></div>
+          <button class="btn btn-ghost hidden" id="pronOverride">Всё равно засчитать ✓</button>
+          <button class="btn btn-primary hidden" id="pronNext">Дальше ›</button>
+          <div class="study-progress" id="pronProgress"></div>
         </div>
       </div>
 
@@ -818,6 +913,7 @@
 
   <script src="packs.js"></script>
   <script src="stories.js"></script>
+  <script src="dialogues.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
