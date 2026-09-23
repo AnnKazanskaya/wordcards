@@ -92,6 +92,7 @@ const el = {
   pickSheet: $("pickSheet"), pickList: $("pickList"), pickNewInput: $("pickNewInput"),
   pickNewBtn: $("pickNewBtn"), pickCloseBtn: $("pickCloseBtn"),
   toast: $("toast"), confetti: $("confetti"), themeColorMeta: $("themeColorMeta"),
+  selBar: $("selBar"), selText: $("selText"), selSpeak: $("selSpeak"), selTranslate: $("selTranslate"),
 };
 
 let mode = "login";
@@ -1963,6 +1964,34 @@ async function openWordSheet(word) {
   }
 }
 el.wsSpeak.onclick = () => speak(el.wsWord.textContent);
+
+// ---------- Выделила текст → «Прослушать» / «Перевести» ----------
+let selText = "";
+function updateSelBar() {
+  const sel = document.getSelection();
+  const text = sel && !sel.isCollapsed ? sel.toString().replace(/\s+/g, " ").trim() : "";
+  const ae = document.activeElement;
+  const typing = ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName);
+  const inApp = sel && sel.anchorNode && el.appScreen.contains(sel.anchorNode);
+  if (text && inApp && !typing && text.length <= 400) {
+    selText = text;
+    el.selText.textContent = text.length > 70 ? text.slice(0, 70) + "…" : text;
+    el.selBar.classList.remove("hidden");
+  } else {
+    el.selBar.classList.add("hidden");
+  }
+}
+document.addEventListener("selectionchange", () => { clearTimeout(updateSelBar._t); updateSelBar._t = setTimeout(updateSelBar, 150); });
+// не даём нажатию на панель снять выделение
+el.selBar.addEventListener("pointerdown", (e) => e.preventDefault());
+el.selSpeak.onclick = () => { if (selText) speak(selText); };
+el.selTranslate.onclick = () => {
+  if (!selText) return;
+  const t = selText;
+  try { document.getSelection().removeAllRanges(); } catch (_) {}
+  el.selBar.classList.add("hidden");
+  openWordSheet(t);
+};
 el.wsCloseBtn.onclick = closeSheets;
 el.wsAddBtn.onclick = () => {
   const tr = el.wsTr.value.trim();

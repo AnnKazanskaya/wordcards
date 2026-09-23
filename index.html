@@ -490,6 +490,19 @@
 
     .hidden { display: none !important; }
 
+    /* панель для выделенного текста */
+    .selbar {
+      position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+      width: calc(100% - 32px); max-width: 428px; z-index: 48;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.18); padding: 10px 12px;
+      display: flex; align-items: center; gap: 8px; animation: pop-in .2s;
+    }
+    .selbar-text { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .selbar button { border: none; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    #selSpeak { background: var(--accent); color: #fff; }
+    #selTranslate { background: var(--accent-soft); color: var(--accent); }
+
     /* toast */
     .toast {
       position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
@@ -933,13 +946,19 @@
     <button class="btn btn-ghost" id="pickCloseBtn">Отмена</button>
   </div>
 
+  <div class="selbar hidden" id="selBar">
+    <span class="selbar-text" id="selText"></span>
+    <button id="selSpeak">🔊 Прослушать</button>
+    <button id="selTranslate">Перевести ›</button>
+  </div>
+
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js?v=6"></script>
-  <script src="stories.js?v=6"></script>
-  <script src="dialogues.js?v=6"></script>
-  <script src="books.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="packs.js?v=7"></script>
+  <script src="stories.js?v=7"></script>
+  <script src="dialogues.js?v=7"></script>
+  <script src="books.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
