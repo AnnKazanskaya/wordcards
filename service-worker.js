@@ -1,6 +1,6 @@
-const CACHE = "wordcards-v5";
+const CACHE = "wordcards-v6";
 const ASSETS = [
-  "./", "./index.html", "./app.js", "./packs.js", "./stories.js", "./dialogues.js",
+  "./", "./index.html", "./app.js", "./packs.js", "./stories.js", "./dialogues.js", "./books.js",
   "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png",
 ];
 
@@ -29,7 +29,7 @@ self.addEventListener("fetch", (e) => {
   if (isCode) {
     // HTML / JS: сеть сначала (обновления видны сразу), кэш — только если оффлайн
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-cache" })
         .then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res; })
         .catch(() => caches.match(req).then((c) => c || caches.match("./index.html")))
     );

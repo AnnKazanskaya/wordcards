@@ -406,6 +406,16 @@
     /* ---------- Reading ---------- */
     .story-text { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px 18px; font-size: 19px; line-height: 1.75; }
     .story-text p + p { margin-top: 14px; }
+    .story-text figure { margin: 16px auto; text-align: center; }
+    .story-text figure + p, .story-text p + figure { margin-top: 14px; }
+    .story-text img { max-width: 100%; height: auto; border-radius: 10px; background: #fff; image-rendering: auto; }
+    html[data-theme="dark"] .story-text img { filter: brightness(.92); }
+    .book-head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .book-head img { width: 180px; max-width: 60%; border-radius: 12px; box-shadow: var(--shadow); }
+    .book-head h2 { font-size: 24px; margin-top: 6px; }
+    .book-author { font-size: 15px; color: var(--muted); }
+    .book-credit { font-size: 12px; color: var(--muted); line-height: 1.4; text-align: center; }
+    .li-cover { width: 44px; height: 60px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
     .w { cursor: pointer; border-radius: 4px; padding: 0 1px; transition: background .12s; }
     .w:hover, .w.hl { background: var(--accent-soft); color: var(--accent); }
     .w.known { text-decoration: underline dotted var(--ok); text-underline-offset: 3px; }
@@ -655,10 +665,24 @@
         <div class="seg" id="readSeg">
           <button class="seg-btn active" data-read="stories">📖 Рассказы</button>
           <button class="seg-btn" data-read="dialogues">💬 Диалоги</button>
+          <button class="seg-btn" data-read="books">📚 Книги</button>
         </div>
         <div class="hint" style="font-size:13px;color:var(--muted);" id="readHint">Нажми на любое слово в рассказе — увидишь перевод и сможешь добавить его в набор.</div>
         <div id="storiesList"></div>
         <div id="dialoguesList" class="hidden"></div>
+        <div id="booksList" class="hidden"></div>
+      </div>
+
+      <!-- BOOK VIEW (оглавление книги) -->
+      <div class="view hidden" id="bookView">
+        <div class="book-head">
+          <img id="bookCover" alt="" />
+          <h2 id="bookTitle">—</h2>
+          <div class="book-author" id="bookAuthor"></div>
+          <div class="book-credit" id="bookCredit"></div>
+        </div>
+        <button class="btn btn-primary" id="bookContinueBtn">Читать ›</button>
+        <div id="bookChapters"></div>
       </div>
 
       <!-- DIALOGUE VIEW -->
@@ -676,6 +700,7 @@
           <span class="lvl" id="readerLevel">A1</span>
           <button class="speak-btn" id="readerSpeakBtn" title="Прослушать">🔊</button>
         </div>
+        <div class="book-credit hidden" id="readerCredit"></div>
         <div class="story-text" id="readerText"></div>
         <div class="reader-hint">нажми на слово — увидишь перевод</div>
         <button class="btn btn-primary" id="readerTasksBtn">Задания ›</button>
@@ -911,9 +936,10 @@
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js"></script>
-  <script src="stories.js"></script>
-  <script src="dialogues.js"></script>
-  <script src="app.js"></script>
+  <script src="packs.js?v=6"></script>
+  <script src="stories.js?v=6"></script>
+  <script src="dialogues.js?v=6"></script>
+  <script src="books.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

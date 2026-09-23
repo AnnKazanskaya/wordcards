@@ -44,7 +44,9 @@ const el = {
   pronView: $("pronView"), pronPrompt: $("pronPrompt"), pronWord: $("pronWord"), pronDef: $("pronDef"),
   pronSpeak: $("pronSpeak"), pronMic: $("pronMic"), pronStatus: $("pronStatus"),
   pronOverride: $("pronOverride"), pronNext: $("pronNext"), pronProgress: $("pronProgress"),
-  readSeg: $("readSeg"), readHint: $("readHint"), dialoguesList: $("dialoguesList"),
+  readSeg: $("readSeg"), readHint: $("readHint"), dialoguesList: $("dialoguesList"), booksList: $("booksList"),
+  bookView: $("bookView"), bookCover: $("bookCover"), bookTitle: $("bookTitle"), bookAuthor: $("bookAuthor"),
+  bookCredit: $("bookCredit"), bookChapters: $("bookChapters"), bookContinueBtn: $("bookContinueBtn"), readerCredit: $("readerCredit"),
   dialogueView: $("dialogueView"), chatWho: $("chatWho"), chatLog: $("chatLog"), chatOptions: $("chatOptions"),
   portionCta: $("portionCta"), portionSub: $("portionSub"), homeAchCta: $("homeAchCta"), homeAchSub: $("homeAchSub"),
   achGrid: $("achGrid"), achCount: $("achCount"),
@@ -319,11 +321,11 @@ async function detectFeatures() {
 //  Навигация
 // =========================================================
 const EXERCISE_VIEWS = ["study", "quiz", "scramble", "match", "write", "learn", "pron", "tasks", "result"];
-const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", dialogue: "read", tasks: "read", stats: "stats" };
+const VIEW_TAB = { home: "home", decks: "decks", packs: "decks", deck: "decks", read: "read", reader: "read", dialogue: "read", book: "read", tasks: "read", stats: "stats" };
 
 function showView(name, title, showBack) {
   currentView = name;
-  const all = ["home", "decks", "packs", "deck", "read", "reader", "dialogue", "stats", ...EXERCISE_VIEWS];
+  const all = ["home", "decks", "packs", "deck", "read", "reader", "dialogue", "book", "stats", ...EXERCISE_VIEWS];
   for (const v of all) el[v + "View"].classList.toggle("hidden", v !== name);
   if (name !== "match" && match.timer) { clearInterval(match.timer); match.timer = null; }
   if (name !== "reader" && name !== "dialogue" && window.speechSynthesis) speechSynthesis.cancel();
@@ -341,7 +343,8 @@ el.backBtn.onclick = () => {
   if (currentView === "tasks" || currentView === "dialogue" || (currentView === "result" && (lastResult.type === "tasks" || lastResult.type === "dialogue"))) { goRead(); return; }
   if (inGame()) { chain = null; if (currentDeck && currentDeck.virtual) goHome(); else openDeck(currentDeck); }
   else if (currentView === "deck" || currentView === "packs") goDecks();
-  else if (currentView === "reader") goRead();
+  else if (currentView === "reader") { if (currentReading && currentReading.back) currentReading.back(); else goRead(); }
+  else if (currentView === "book") goRead();
   else goHome();
 };
 el.tabbar.querySelectorAll("button").forEach((b) => {
@@ -633,6 +636,7 @@ const ACHIEVEMENTS = [
   { id: "streak_30", icon: "🏅", name: "Месяц подряд", test: (s) => s.best >= 30 },
   { id: "answers_500", icon: "⚡", name: "500 ответов", test: (s) => s.answers >= 500 },
   { id: "story_first", icon: "📖", name: "Первый рассказ", test: (s) => s.stories >= 1 },
+  { id: "chapter_first", icon: "📚", name: "Первая глава", test: (s) => s.chapters >= 1 },
   { id: "story_perfect", icon: "⭐", name: "5 из 5", test: (s) => s.perfectStory },
   { id: "stories_all", icon: "🏆", name: "Все рассказы", test: (s) => s.stories >= window.STORIES.length },
   { id: "dialogue_first", icon: "💬", name: "Первый диалог", test: (s) => s.dialogues >= 1 },
@@ -657,6 +661,7 @@ function achStats(active) {
     stories: lsGet("readStories", []).length,
     perfectStory: Object.values(scores).some((s) => s.total > 0 && s.best === s.total),
     dialogues: Object.keys(lsGet("dialoguesDone", {})).length,
+    chapters: Object.values(lsGet("bookRead", {})).reduce((n, l) => n + l.length, 0),
     portions: lsGet("portionsDone", 0),
     packs: decks.filter((d) => packTitles.has(d.title)).length,
     dictations: lsGet("dictationsDone", 0),
@@ -1611,9 +1616,12 @@ function setReadMode(m) {
   el.readSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.read === m));
   el.storiesList.classList.toggle("hidden", m !== "stories");
   el.dialoguesList.classList.toggle("hidden", m !== "dialogues");
+  el.booksList.classList.toggle("hidden", m !== "books");
   el.readHint.textContent = m === "stories"
     ? "Нажми на любое слово в рассказе — увидишь перевод и сможешь добавить его в набор."
-    : "Выбирай, что ответить собеседнику. Слова в репликах тоже можно нажимать.";
+    : m === "dialogues"
+      ? "Выбирай, что ответить собеседнику. Слова в репликах тоже можно нажимать."
+      : "Настоящие книги по главам, с иллюстрациями. Любое слово — тап и перевод.";
 }
 el.readSeg.querySelectorAll(".seg-btn").forEach((b) => { b.onclick = () => { sfx.tap(); setReadMode(b.dataset.read); }; });
 
@@ -1621,8 +1629,99 @@ async function goRead() {
   showView("read", "Читать", false);
   renderStories();
   renderDialogues();
+  renderBooks();
   setReadMode(readMode);
   await Promise.all([loadDecksData(), loadAllCards()]);
+}
+
+// ---------- Книги по главам ----------
+let currentBook = null;
+function bookReadSet(book) { return new Set((lsGet("bookRead", {})[book.id]) || []); }
+function markChapterRead(book, ch) {
+  const all = lsGet("bookRead", {});
+  const list = all[book.id] || [];
+  if (!list.includes(ch.id)) { list.push(ch.id); all[book.id] = list; lsSet("bookRead", all); checkAchievements(false); }
+}
+function renderBooks() {
+  el.booksList.innerHTML = "";
+  for (const b of window.BOOKS || []) {
+    const read = bookReadSet(b);
+    const item = document.createElement("div"); item.className = "list-item";
+    item.innerHTML = `
+      <img class="li-cover" alt="" />
+      <div class="grow"><div class="li-title"></div><div class="li-sub"></div></div>
+      <span class="lvl ${b.level.toLowerCase()}">${b.level}</span>`;
+    item.querySelector("img").src = b.cover;
+    item.querySelector(".li-title").textContent = b.title;
+    item.querySelector(".li-sub").textContent = `${b.author} · ${read.size} из ${b.chapters.length} глав`;
+    item.onclick = () => openBook(b);
+    el.booksList.appendChild(item);
+  }
+}
+function openBook(book) {
+  currentBook = book;
+  showView("book", book.title, true);
+  el.bookCover.src = book.cover;
+  el.bookTitle.textContent = book.title;
+  el.bookAuthor.textContent = book.author;
+  el.bookCredit.textContent = book.credit || "";
+  const read = bookReadSet(book);
+  const nextIdx = Math.max(0, book.chapters.findIndex((c) => !read.has(c.id)));
+  const allRead = read.size >= book.chapters.length;
+  el.bookContinueBtn.textContent = allRead ? "Перечитать с начала ›" : (read.size ? `Продолжить: ${book.chapters[nextIdx].title} ›` : "Начать читать ›");
+  el.bookContinueBtn.onclick = () => openChapter(book, allRead ? 0 : nextIdx);
+  el.bookChapters.innerHTML = "";
+  book.chapters.forEach((ch, i) => {
+    const words = ch.blocks.filter((x) => x.p).reduce((n, x) => n + (x.p.match(/\p{L}+/gu) || []).length, 0);
+    const item = document.createElement("div"); item.className = "list-item";
+    item.innerHTML = `<div class="li-icon">${read.has(ch.id) ? "✅" : "📄"}</div><div class="grow"><div class="li-title"></div><div class="li-sub">${words} ${plural(words, "слово", "слова", "слов")}</div></div>`;
+    item.querySelector(".li-title").textContent = ch.title;
+    item.onclick = () => openChapter(book, i);
+    el.bookChapters.appendChild(item);
+  });
+}
+function openChapter(book, i) {
+  const ch = book.chapters[i];
+  const last = i + 1 >= book.chapters.length;
+  openReading({
+    title: ch.title, level: book.level, credit: book.credit, blocks: ch.blocks,
+    speakText: ch.blocks.filter((b) => b.p).map((b) => b.p).join(" "),
+    primaryLabel: last ? "✓ Глава прочитана" : "Следующая глава ›",
+    onPrimary: () => {
+      markChapterRead(book, ch);
+      if (last) { toast("Все главы прочитаны 📚"); confetti.burst(120); sfx.finish(); openBook(book); }
+      else openChapter(book, i + 1);
+    },
+    back: () => openBook(book),
+  });
+}
+
+// универсальная читалка: абзацы с переводом по тапу + картинки
+let currentReading = null;
+function openReading(cfg) {
+  currentReading = cfg;
+  showView("reader", cfg.title, true);
+  el.readerTitle.textContent = cfg.title;
+  el.readerLevel.textContent = cfg.level; el.readerLevel.className = "lvl " + cfg.level.toLowerCase();
+  el.readerCredit.classList.toggle("hidden", !cfg.credit);
+  el.readerCredit.textContent = cfg.credit || "";
+  const known = knownTerms();
+  el.readerText.innerHTML = "";
+  for (const b of cfg.blocks) {
+    if (b.img) {
+      const fig = document.createElement("figure");
+      const img = document.createElement("img");
+      img.src = b.img; img.alt = b.alt || ""; img.loading = "lazy";
+      if (b.w) img.style.width = b.w + "px";
+      fig.appendChild(img); el.readerText.appendChild(fig);
+    } else {
+      const p = document.createElement("p");
+      fillTokens(p, b.p, known);
+      el.readerText.appendChild(p);
+    }
+  }
+  el.readerTasksBtn.textContent = cfg.primaryLabel;
+  el.readerTasksBtn.onclick = cfg.onPrimary;
 }
 
 // делит текст на слова-«кнопки» и остальное; известные слова подчёркивает
@@ -1729,19 +1828,16 @@ function renderStories() {
 function knownTerms() { return new Set(allCards.map((c) => c.term.toLowerCase())); }
 function openStory(s) {
   currentStory = s;
-  showView("reader", s.title, true);
-  el.readerTitle.textContent = s.title;
-  el.readerLevel.textContent = s.level; el.readerLevel.className = "lvl " + s.level.toLowerCase();
-  const known = knownTerms();
-  el.readerText.innerHTML = "";
-  for (const para of s.text.split(/\n\s*\n/)) {
-    const p = document.createElement("p");
-    fillTokens(p, para, known);
-    el.readerText.appendChild(p);
-  }
   const sc = lsGet("storyScores", {})[s.id];
   const n = (s.tasks || []).length;
-  el.readerTasksBtn.textContent = sc ? `Задания ещё раз (лучший ${sc.best}/${sc.total}) ›` : `Задания (${n}) ›`;
+  openReading({
+    title: s.title, level: s.level, credit: "",
+    blocks: s.text.split(/\n\s*\n/).map((p) => ({ p })),
+    speakText: s.text.replace(/\s+/g, " "),
+    primaryLabel: sc ? `Задания ещё раз (лучший ${sc.best}/${sc.total}) ›` : `Задания (${n}) ›`,
+    onPrimary: () => startTasks(s),
+    back: () => goRead(),
+  });
 }
 el.readerText.addEventListener("click", (e) => {
   const w = e.target.closest(".w"); if (!w) return;
@@ -1750,11 +1846,10 @@ el.readerText.addEventListener("click", (e) => {
   openWordSheet(w.textContent);
 });
 el.readerSpeakBtn.onclick = () => {
-  if (!window.speechSynthesis) return;
+  if (!window.speechSynthesis || !currentReading) return;
   if (speechSynthesis.speaking) { speechSynthesis.cancel(); return; }
-  speak(currentStory.text.replace(/\s+/g, " "));
+  speak(currentReading.speakText);
 };
-el.readerTasksBtn.onclick = () => startTasks(currentStory);
 
 // ---------- Задания после чтения ----------
 let tasks = { story: null, list: [], index: 0, score: 0, locked: false, missed: [] };
