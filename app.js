@@ -89,6 +89,7 @@ const el = {
   exportSheet: $("exportSheet"), exportText: $("exportText"), exportCopyBtn: $("exportCopyBtn"), exportCloseBtn: $("exportCloseBtn"),
   wordSheet: $("wordSheet"), wsWord: $("wsWord"), wsSpeak: $("wsSpeak"), wsForms: $("wsForms"), wsTermInput: $("wsTermInput"),
   wsTr: $("wsTr"), wsStatus: $("wsStatus"), wsAddBtn: $("wsAddBtn"), wsCloseBtn: $("wsCloseBtn"),
+  wsCtx: $("wsCtx"), wsCtxText: $("wsCtxText"), wsCtxTr: $("wsCtxTr"), wsCtxBtn: $("wsCtxBtn"), wsCtxSpeak: $("wsCtxSpeak"),
   pickSheet: $("pickSheet"), pickList: $("pickList"), pickNewInput: $("pickNewInput"),
   pickNewBtn: $("pickNewBtn"), pickCloseBtn: $("pickCloseBtn"),
   toast: $("toast"), confetti: $("confetti"), themeColorMeta: $("themeColorMeta"),
@@ -920,15 +921,22 @@ el.addCardBtn.onclick = addCard;
 el.defInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCard(); });
 el.termInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); el.defInput.focus(); } });
 
-// Автоперевод EN→RU через бесплатный сервис MyMemory (без ключа)
+// Автоперевод EN→RU через бесплатный сервис MyMemory (без ключа); результаты кэшируем
 async function translateWord(text) {
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ru`;
+  const key = text.trim().toLowerCase();
+  const cache = lsGet("trCache", {});
+  if (cache[key]) return cache[key];
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 480))}&langpair=en|ru`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("network");
   const data = await res.json();
   const t = data && data.responseData && data.responseData.translatedText;
   if (!t || Number(data.responseStatus) !== 200) throw new Error("no-translation");
-  return t.trim();
+  const out = t.trim();
+  const keys = Object.keys(cache);
+  if (keys.length > 300) delete cache[keys[0]];
+  cache[key] = out; lsSet("trCache", cache);
+  return out;
 }
 let translating = false;
 el.termInput.addEventListener("blur", async () => {
@@ -1805,7 +1813,7 @@ el.chatLog.addEventListener("click", (e) => {
   const w = e.target.closest(".w"); if (!w) return;
   el.chatLog.querySelectorAll(".w.hl").forEach((x) => x.classList.remove("hl"));
   w.classList.add("hl");
-  openWordSheet(w.textContent);
+  openWordSheet(w.textContent, { sentence: sentenceAround(w) });
 });
 function renderStories() {
   const read = new Set(lsGet("readStories", []));
@@ -1844,7 +1852,7 @@ el.readerText.addEventListener("click", (e) => {
   const w = e.target.closest(".w"); if (!w) return;
   el.readerText.querySelectorAll(".w.hl").forEach((x) => x.classList.remove("hl"));
   w.classList.add("hl");
-  openWordSheet(w.textContent);
+  openWordSheet(w.textContent, { sentence: sentenceAround(w) });
 });
 el.readerSpeakBtn.onclick = () => {
   if (!window.speechSynthesis || !currentReading) return;
@@ -1986,9 +1994,65 @@ el.wsTermInput.addEventListener("input", () => {
   updateWsStatus();
 });
 
-async function openWordSheet(word) {
+// текст блока без служебных подписей (перевод реплики в пузыре)
+function blockText(block) {
+  let s = "";
+  for (const n of block.childNodes) {
+    if (n.nodeType === 3) s += n.textContent;
+    else if (n.nodeType === 1 && !n.classList.contains("tr")) s += n.textContent;
+  }
+  return s;
+}
+// предложение, в котором стоит нажатое слово
+function sentenceAround(span) {
+  const block = span.closest("p, .bubble, .task-text");
+  if (!block) return "";
+  const range = document.createRange(); range.setStart(block, 0); range.setEndBefore(span);
+  const off = range.toString().length;
+  const text = blockText(block);
+  let start = 0, end = text.length;
+  const re = /[.!?…]+["”’)]*\s+/g; let m;
+  while ((m = re.exec(text))) {
+    const b = m.index + m[0].length;
+    if (b <= off) start = b; else { end = b; break; }
+  }
+  return text.slice(start, end).trim();
+}
+let wsSentence = "";
+function showContext(sentence, word) {
+  wsSentence = sentence || "";
+  const show = !!sentence && sentence.toLowerCase() !== word.toLowerCase();
+  el.wsCtx.classList.toggle("hidden", !show);
+  el.wsCtxTr.classList.add("hidden"); el.wsCtxTr.textContent = "";
+  el.wsCtxBtn.disabled = false; el.wsCtxBtn.textContent = "Перевести предложение ›";
+  if (!show) return;
+  el.wsCtxText.innerHTML = "";
+  const re = new RegExp(`(^|[^\\p{L}])(${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?=[^\\p{L}]|$)`, "iu");
+  const m = sentence.match(re);
+  if (m) {
+    const i = m.index + m[1].length;
+    el.wsCtxText.append(document.createTextNode(sentence.slice(0, i)));
+    const b = document.createElement("b"); b.textContent = sentence.slice(i, i + m[2].length); el.wsCtxText.appendChild(b);
+    el.wsCtxText.append(document.createTextNode(sentence.slice(i + m[2].length)));
+  } else el.wsCtxText.textContent = sentence;
+}
+el.wsCtxBtn.onclick = async () => {
+  if (!wsSentence) return;
+  el.wsCtxBtn.disabled = true; el.wsCtxBtn.textContent = "перевожу…";
+  try {
+    const t = await translateWord(wsSentence);
+    el.wsCtxTr.textContent = t; el.wsCtxTr.classList.remove("hidden");
+    el.wsCtxBtn.textContent = "Переведено ✓";
+  } catch (_) {
+    el.wsCtxBtn.disabled = false; el.wsCtxBtn.textContent = "Не удалось — попробовать ещё раз";
+  }
+};
+el.wsCtxSpeak.onclick = () => { if (wsSentence) speak(wsSentence); };
+
+async function openWordSheet(word, ctx) {
   const clean = word.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
   const seen = clean.toLowerCase();
+  showContext(ctx && ctx.sentence, clean);
   const r = lookup(clean);
   const single = !/\s/.test(seen);
   let base = r ? r.base : null, guessed = false;

@@ -482,6 +482,13 @@
     .sheet h3 { font-size: 17px; }
     .sheet .hint { font-size: 13px; color: var(--muted); }
     .ws-word { font-size: 28px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+    .ws-ctx { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .ws-ctx-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .ws-ctx-text { font-size: 15px; line-height: 1.45; }
+    .ws-ctx-text b { color: var(--accent); }
+    .ws-ctx-tr { font-size: 15px; line-height: 1.45; color: var(--ink); padding-top: 6px; border-top: 1px dashed var(--line); }
+    .ws-ctx-row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    .ws-ctx-row .btn { flex: 1; }
     .ws-forms { display: flex; flex-wrap: wrap; gap: 8px; }
     .form-chip {
       padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg);
@@ -722,7 +729,7 @@
         </div>
         <div class="book-credit hidden" id="readerCredit"></div>
         <div class="story-text" id="readerText"></div>
-        <div class="reader-hint">нажми на слово — увидишь перевод</div>
+        <div class="reader-hint">нажми на слово — перевод и предложение с ним · выдели фразу — перевод целиком</div>
         <button class="btn btn-primary" id="readerTasksBtn">Задания ›</button>
       </div>
 
@@ -937,6 +944,15 @@
     <input id="wsTermInput" placeholder="слово" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" />
     <label for="wsTr">Перевод</label>
     <input id="wsTr" placeholder="перевод" />
+    <div class="ws-ctx hidden" id="wsCtx">
+      <div class="ws-ctx-label">В тексте</div>
+      <div class="ws-ctx-text" id="wsCtxText"></div>
+      <div class="ws-ctx-tr hidden" id="wsCtxTr"></div>
+      <div class="ws-ctx-row">
+        <button type="button" class="btn btn-ghost btn-sm" id="wsCtxBtn">Перевести предложение ›</button>
+        <button type="button" class="speak-btn" id="wsCtxSpeak" title="Прослушать предложение" style="width:38px;height:38px;font-size:16px;">🔊</button>
+      </div>
+    </div>
     <div class="ws-status hidden" id="wsStatus"></div>
     <button class="btn btn-primary" id="wsAddBtn">+ Добавить в набор</button>
     <button class="btn btn-ghost" id="wsCloseBtn">Закрыть</button>
@@ -964,10 +980,10 @@
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js?v=8"></script>
-  <script src="stories.js?v=8"></script>
-  <script src="dialogues.js?v=8"></script>
-  <script src="books.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="packs.js?v=9"></script>
+  <script src="stories.js?v=9"></script>
+  <script src="dialogues.js?v=9"></script>
+  <script src="books.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
