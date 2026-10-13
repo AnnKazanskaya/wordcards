@@ -15,7 +15,7 @@
 
   <!-- Supabase JS client (loaded from CDN, no install needed) -->
   <!-- supabase-js 2.117.3, локальная копия: не зависим от CDN, работает офлайн и в iOS-оболочке -->
-  <script src="vendor/supabase.min.js?v=11"></script>
+  <script src="vendor/supabase.min.js?v=12"></script>
 
   <style>
     :root {
@@ -276,6 +276,35 @@
     .lvl { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
     .lvl.a2 { background: var(--ok-soft); color: var(--ok); }
     .lvl.b1 { background: var(--warn-bg); color: var(--warn-ink); }
+
+    /* экран «Наборы» */
+    .decks-actions { display: flex; gap: 8px; }
+    .decks-actions .btn { flex: 1; }
+    .decks-summary { font-size: 13px; color: var(--muted); }
+    .decks-summary:empty { display: none; }
+    #decksList { display: flex; flex-direction: column; gap: 10px; }
+    .decks-group { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin: 8px 0 -2px; }
+    .deck-card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 14px; display: flex; align-items: center; gap: 12px; cursor: pointer;
+      transition: border-color .15s, transform .1s; text-align: left; color: var(--ink); width: 100%;
+    }
+    .deck-card:hover { border-color: var(--accent); }
+    .deck-card:active { transform: scale(.99); }
+    .deck-card .dk-ico {
+      width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center;
+      font-size: 22px; font-weight: 800; flex: none; color: #fff;
+    }
+    .deck-card .dk-ico.emoji { color: inherit; }
+    .deck-card .grow { flex: 1; min-width: 0; }
+    .deck-card .dk-title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .deck-card .dk-sub { font-size: 13px; color: var(--muted); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .deck-card .dk-due { color: var(--fire); font-weight: 700; }
+    .deck-card .dk-done { color: var(--ok); font-weight: 700; }
+    .deck-card .dk-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .deck-card .dk-bar .pbar { flex: 1; margin-top: 0; }
+    .deck-card .dk-pct { font-size: 12px; font-weight: 700; color: var(--ok); min-width: 34px; text-align: right; }
+    .deck-card .dk-chev { color: var(--muted); font-size: 24px; line-height: 1; padding-bottom: 3px; }
 
     /* каталог слов */
     .cat-search { font-size: 15px; padding: 11px 14px; border-radius: 12px; }
@@ -677,14 +706,18 @@
 
       <!-- DECKS VIEW -->
       <div class="view hidden" id="decksView">
-        <div id="decksList"></div>
-        <div class="add-row">
+        <div class="decks-actions">
+          <button class="btn btn-primary" id="newDeckToggle">+ Новый набор</button>
+          <button class="btn btn-ghost" id="packsBtn">🗂 Каталог слов</button>
+        </div>
+        <div class="add-row hidden" id="newDeckRow" style="margin-top:0;">
           <div class="inputs">
             <input id="newDeckInput" placeholder="Название набора, напр. «Еда»" />
             <button class="btn btn-secondary" id="newDeckBtn" style="width:auto;">Создать</button>
           </div>
-          <button class="btn btn-ghost" id="packsBtn">🗂 Каталог слов</button>
         </div>
+        <div class="decks-summary" id="decksSummary"></div>
+        <div id="decksList"></div>
       </div>
 
       <!-- PACKS VIEW (каталог слов) -->
@@ -734,6 +767,7 @@
             <button class="btn btn-ghost btn-sm" id="exportBtn">⬇ Экспорт</button>
           </div>
         </div>
+        <div style="text-align:center;margin-top:18px;"><button class="link-btn" id="deleteDeckBtn" style="color:var(--muted);">Удалить набор</button></div>
       </div>
 
       <!-- READ VIEW (stories + dialogues) -->
@@ -1029,11 +1063,11 @@
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js?v=11"></script>
-  <script src="catalog.js?v=11"></script>
-  <script src="stories.js?v=11"></script>
-  <script src="dialogues.js?v=11"></script>
-  <script src="books.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="packs.js?v=12"></script>
+  <script src="catalog.js?v=12"></script>
+  <script src="stories.js?v=12"></script>
+  <script src="dialogues.js?v=12"></script>
+  <script src="books.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

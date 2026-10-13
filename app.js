@@ -28,8 +28,9 @@ const el = {
   lastDeckCta: $("lastDeckCta"), lastDeckTitle: $("lastDeckTitle"), lastDeckSub: $("lastDeckSub"),
   homeReadCta: $("homeReadCta"), homeReadSub: $("homeReadSub"), homePacksCta: $("homePacksCta"),
   // decks / packs
-  decksView: $("decksView"), decksList: $("decksList"),
+  decksView: $("decksView"), decksList: $("decksList"), decksSummary: $("decksSummary"),
   newDeckInput: $("newDeckInput"), newDeckBtn: $("newDeckBtn"), packsBtn: $("packsBtn"),
+  newDeckToggle: $("newDeckToggle"), newDeckRow: $("newDeckRow"), deleteDeckBtn: $("deleteDeckBtn"),
   packsView: $("packsView"), packsList: $("packsList"), catalogSearch: $("catalogSearch"),
   // deck
   deckView: $("deckView"), cardsList: $("cardsList"), studyBtn: $("studyBtn"),
@@ -705,31 +706,71 @@ async function goDecks() {
   await Promise.all([loadDecksData(true), loadAllCards()]);
   renderDecks();
 }
+// цвет и значок набора: эмодзи из названия, иначе первая буква на цветной плитке
+const DECK_COLORS = ["#4f46e5", "#0ea5e9", "#1a9e54", "#f59e0b", "#e5484d", "#8b5cf6", "#ec4899", "#f97316", "#14b8a6"];
+function deckColor(title) {
+  let h = 0;
+  for (const ch of title) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return DECK_COLORS[h % DECK_COLORS.length];
+}
+function deckIcon(title) {
+  const m = title.match(/^(\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*)\s*/u);
+  if (m) return { emoji: m[1], rest: title.slice(m[0].length) || title };
+  const letter = (title.match(/\p{L}/u) || [title[0] || "?"])[0].toUpperCase();
+  return { emoji: null, letter, rest: title };
+}
+function deckCard(deck) {
+  const s = deckStats(deck.id);
+  const pct = s.total ? Math.round((s.learned / s.total) * 100) : 0;
+  const color = deckColor(deck.title);
+  const ic = deckIcon(deck.title);
+  const card = document.createElement("button");
+  card.className = "deck-card";
+  let sub;
+  if (!s.total) sub = "<span>пусто, открой и добавь слова</span>";
+  else {
+    sub = `<span>${s.total} ${plural(s.total, "слово", "слова", "слов")}</span>`;
+    if (s.learned === s.total) sub += '<span class="dk-done">✓ всё выучено</span>';
+    else if (s.learned) sub += `<span>${s.learned} выучено</span>`;
+    if (s.due) sub += `<span class="dk-due">⏰ ${s.due} к повторению</span>`;
+  }
+  card.innerHTML = `
+    <div class="dk-ico ${ic.emoji ? "emoji" : ""}"></div>
+    <div class="grow">
+      <div class="dk-title"></div>
+      <div class="dk-sub">${sub}</div>
+      <div class="dk-bar ${s.total ? "" : "hidden"}"><div class="pbar"><div style="width:${pct}%"></div></div><span class="dk-pct">${pct}%</span></div>
+    </div>
+    <span class="dk-chev">›</span>`;
+  const tile = card.querySelector(".dk-ico");
+  tile.textContent = ic.emoji || ic.letter;
+  tile.style.background = ic.emoji ? `color-mix(in srgb, ${color} 18%, var(--surface))` : color;
+  card.querySelector(".dk-title").textContent = ic.rest;
+  card.onclick = () => { sfx.tap(); openDeck(deck); };
+  return card;
+}
 function renderDecks() {
   if (!decks.length) {
-    el.decksList.innerHTML = '<div class="empty">Пока нет наборов.<br>Создай первый ниже или возьми готовую подборку 👇</div>';
+    el.decksSummary.textContent = "";
+    el.decksList.innerHTML = '<div class="empty">Пока нет наборов.<br>Нажми «Новый набор» или возьми подборку из каталога.</div>';
     return;
   }
+  const total = allCards.length, learned = allCards.filter(isLearned).length;
+  el.decksSummary.textContent = `${decks.length} ${plural(decks.length, "набор", "набора", "наборов")} · ${total} ${plural(total, "слово", "слова", "слов")} · ${learned} выучено`;
   el.decksList.innerHTML = "";
-  for (const deck of decks) {
-    const s = deckStats(deck.id);
-    const item = document.createElement("div");
-    item.className = "list-item";
-    item.innerHTML = `
-      <div class="grow">
-        <div class="li-title"></div>
-        <div class="li-sub"></div>
-        <div class="pbar"><div style="width:${s.total ? Math.round((s.learned / s.total) * 100) : 0}%"></div></div>
-      </div>
-      <button class="del-btn" title="Удалить">🗑</button>`;
-    item.querySelector(".li-title").textContent = deck.title;
-    item.querySelector(".li-sub").textContent = s.total
-      ? `${s.total} ${plural(s.total, "слово", "слова", "слов")} · ${s.learned} выучено` + (s.due ? ` · ⏰ ${s.due}` : "")
-      : "пусто — открой и добавь слова";
-    item.querySelector(".grow").onclick = () => openDeck(deck);
-    item.querySelector(".del-btn").onclick = (e) => { e.stopPropagation(); deleteDeck(deck); };
-    el.decksList.appendChild(item);
-  }
+  // наборы из каталога показываем отдельной группой, если есть и свои, и из каталога
+  const packTitles = new Set((window.PACKS || []).map((p) => `${p.icon} ${p.name}`));
+  const mine = decks.filter((d) => !packTitles.has(d.title));
+  const fromCatalog = decks.filter((d) => packTitles.has(d.title));
+  const addGroup = (label, list) => {
+    if (!list.length) return;
+    if (mine.length && fromCatalog.length) {
+      const h = document.createElement("div"); h.className = "decks-group"; h.textContent = label; el.decksList.appendChild(h);
+    }
+    for (const d of list) el.decksList.appendChild(deckCard(d));
+  };
+  addGroup("Мои наборы", mine);
+  addGroup("Из каталога", fromCatalog);
 }
 
 async function createDeck(title) {
@@ -741,9 +782,22 @@ async function createDeck(title) {
   decks.push(data); lsSet("decks", decks);
   return data;
 }
-el.newDeckBtn.onclick = async () => { if (await createDeck()) renderDecks(); };
-el.newDeckInput.addEventListener("keydown", async (e) => { if (e.key === "Enter") { if (await createDeck()) renderDecks(); } });
+el.newDeckToggle.onclick = () => {
+  sfx.tap();
+  const open = el.newDeckRow.classList.toggle("hidden");
+  if (!open) el.newDeckInput.focus();
+};
+async function createDeckFromInput() {
+  const deck = await createDeck();
+  if (!deck) return;
+  el.newDeckRow.classList.add("hidden");
+  renderDecks();
+  openDeck(deck);
+}
+el.newDeckBtn.onclick = createDeckFromInput;
+el.newDeckInput.addEventListener("keydown", (e) => { if (e.key === "Enter") createDeckFromInput(); });
 el.packsBtn.onclick = () => goPacks();
+el.deleteDeckBtn.onclick = () => { if (currentDeck && currentDeck.id) deleteDeck(currentDeck); };
 
 async function deleteDeck(deck) {
   if (!confirm(`Удалить набор «${deck.title}» вместе со словами?`)) return;
@@ -751,7 +805,8 @@ async function deleteDeck(deck) {
   if (error) { toast("Ошибка: " + error.message); return; }
   decks = decks.filter((d) => d.id !== deck.id); lsSet("decks", decks);
   allCards = allCards.filter((c) => c.deck_id !== deck.id); saveAllCardsCache();
-  renderDecks();
+  localStorage.removeItem("cards_" + deck.id);
+  if (currentView === "deck") { currentDeck = null; goDecks(); } else renderDecks();
 }
 
 // =========================================================
@@ -933,6 +988,7 @@ async function openDeck(deck) {
   currentDeck = deck;
   lsSet("lastDeckId", deck.id);
   part = deck.id ? lsGet("part_" + deck.id, 0) : 0;
+  el.deleteDeckBtn.classList.toggle("hidden", !deck.id);
   if (scope === "review" && !SRS_OK) setScope("all");
   showView("deck", deck.title, true);
   await loadCards();
