@@ -1,7 +1,7 @@
-const CACHE = "wordcards-v13";
+const CACHE = "wordcards-v15";
 const ASSETS = [
   "./", "./index.html", "./app.js", "./packs.js", "./catalog.js", "./stories.js", "./dialogues.js", "./books.js", "./vendor/supabase.min.js",
-  "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png",
+  "./manifest.json", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./mascot/star.png",
 ];
 
 // при установке — кладём оболочку приложения в кэш

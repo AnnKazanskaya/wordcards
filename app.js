@@ -752,7 +752,7 @@ function deckCard(deck) {
 function renderDecks() {
   if (!decks.length) {
     el.decksSummary.textContent = "";
-    el.decksList.innerHTML = '<div class="empty">Пока нет наборов.<br>Нажми «Новый набор» или возьми подборку из каталога.</div>';
+    el.decksList.innerHTML = '<div class="empty"><img src="mascot/star.png" alt="" />Пока нет наборов.<br>Нажми «Новый набор» или возьми подборку из каталога.</div>';
     return;
   }
   const total = allCards.length, learned = allCards.filter(isLearned).length;
@@ -1745,7 +1745,7 @@ function showResult({ type, correct, wrong, missed, sub, title, dictation }) {
   const readType = type === "tasks" || type === "dialogue";
   lastResult = { type, dictation: !!dictation, missed: readType ? (missed || []).slice() : dedupeCards(missed || []) };
   const perfect = wrong === 0;
-  el.resultEmoji.textContent = perfect ? "🎉" : "💪";
+  el.resultEmoji.innerHTML = `<img src="mascot/star.png" alt="" /><div class="result-badge">${perfect ? "🎉" : "💪"}</div>`;
   el.resultStats.textContent = `${correct} верно · ${wrong} ${wrong === 1 ? "ошибка" : "ошибок"}`;
   el.resultSub.textContent = sub || (perfect ? "Без единой ошибки!" : "");
   const m = lastResult.missed.length;

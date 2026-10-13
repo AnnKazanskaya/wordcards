@@ -15,7 +15,7 @@
 
   <!-- Supabase JS client (loaded from CDN, no install needed) -->
   <!-- supabase-js 2.117.3, локальная копия: не зависим от CDN, работает офлайн и в iOS-оболочке -->
-  <script src="vendor/supabase.min.js?v=13"></script>
+  <script src="vendor/supabase.min.js?v=15"></script>
 
   <style>
     :root {
@@ -200,6 +200,13 @@
     .streak-fire { font-size: 44px; line-height: 1; animation: flame 1.6s ease-in-out infinite; }
     .streak-fire.off { filter: grayscale(1); opacity: .6; animation: none; }
     @keyframes flame { 0%,100% { transform: scale(1) rotate(-3deg); } 50% { transform: scale(1.08) rotate(3deg); } }
+    .streak-mascot { width: 74px; height: 74px; flex: none; margin: -10px -6px -10px 0; filter: drop-shadow(0 4px 8px rgba(0,0,0,.25)); }
+    .brand-mascot { width: 120px; height: 120px; display: block; margin: 0 auto 6px; animation: bob 3s ease-in-out infinite; }
+    @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .result-emoji { position: relative; }
+    .result-emoji img { width: 130px; height: 130px; display: block; margin: 0 auto; animation: bob 2.4s ease-in-out infinite; }
+    .result-badge { position: absolute; right: calc(50% - 90px); top: -6px; font-size: 34px; line-height: 1; }
+    .empty img { width: 96px; height: 96px; display: block; margin: 0 auto 8px; opacity: .9; }
     .streak-num { font-size: 34px; font-weight: 800; line-height: 1; }
     .streak-label { font-size: 14px; opacity: .9; margin-top: 4px; }
     .streak-today { font-size: 13px; opacity: .85; margin-top: 6px; }
@@ -622,6 +629,7 @@
     <!-- ============ AUTH SCREEN ============ -->
     <div class="auth" id="authScreen">
       <div class="brand">
+        <img src="mascot/star.png" class="brand-mascot" alt="" />
         <h1>WordCards</h1>
         <p>учим английские слова</p>
       </div>
@@ -660,6 +668,7 @@
             <div class="streak-label" id="streakLabel">дней подряд</div>
             <div class="streak-today" id="streakToday">сегодня ещё не занималась</div>
           </div>
+          <img src="mascot/star.png" class="streak-mascot" alt="" />
         </div>
 
         <button class="cta accent hidden" id="reviewCta">
@@ -1063,11 +1072,11 @@
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
-  <script src="packs.js?v=13"></script>
-  <script src="catalog.js?v=13"></script>
-  <script src="stories.js?v=13"></script>
-  <script src="dialogues.js?v=13"></script>
-  <script src="books.js?v=13"></script>
-  <script src="app.js?v=13"></script>
+  <script src="packs.js?v=15"></script>
+  <script src="catalog.js?v=15"></script>
+  <script src="stories.js?v=15"></script>
+  <script src="dialogues.js?v=15"></script>
+  <script src="books.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
