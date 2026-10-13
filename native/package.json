@@ -1,0 +1,19 @@
+{
+  "name": "wordcards-native",
+  "private": true,
+  "version": "1.0.0",
+  "description": "iOS-оболочка (Capacitor) для WordCards: сайт из корня репозитория упаковывается в приложение для TestFlight",
+  "scripts": {
+    "sync": "sh sync.sh",
+    "open": "cap open ios",
+    "icons": "capacitor-assets generate --ios --iconBackgroundColor '#4f46e5' --iconBackgroundColorDark '#4f46e5' --splashBackgroundColor '#f7f7f8' --splashBackgroundColorDark '#0f1014'"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7",
+    "@capacitor/ios": "^7"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7"
+  }
+}

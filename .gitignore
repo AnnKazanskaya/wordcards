@@ -1,2 +1,10 @@
 .claude/
 .DS_Store
+
+# iOS-оболочка (Capacitor)
+native/node_modules/
+native/www/
+native/ios/App/App/public/
+native/ios/DerivedData/
+native/ios/App/App.xcodeproj/xcuserdata/
+native/ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
