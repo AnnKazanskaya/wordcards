@@ -39,13 +39,19 @@ cd ~/Desktop/Учёба/study/wordcards/native && bash release.sh
 в Internal Testing. На iPhone поставить приложение **TestFlight**, в нём
 появится WordCards. Каждое следующее обновление сайта: снова `bash release.sh`.
 
-Тот же путь руками через Xcode: `npm run open`, выбрать Any iOS Device,
-Product › Archive › Distribute App › TestFlight & App Store › Upload.
+Тот же путь руками через Xcode: `open ios/App/App.xcodeproj`, выбрать
+Any iOS Device, Product › Archive › Distribute App › TestFlight & App Store › Upload.
+
+Если скрипт просит создать приложение в App Store Connect, сделай шаг 3 из
+раздела выше и запусти `bash release.sh` ещё раз.
 
 ## Что важно знать
 
-- Иконки и заставка уже сгенерированы (`npm run icons` пересоздаёт их из `assets/logo.png`).
-- `npm run sync` только обновляет `www/` и iOS-проект без сборки.
+- Иконки и заставка уже сгенерированы (`sh icons.sh` пересоздаёт их из
+  `assets/logo.png` и `assets/splash.png`, это маскот Анны).
+- `sh sync.sh` только обновляет `www/` и iOS-проект без сборки.
+- Команды `npm run …` и `npx …` при плохой сети (VPN) зависают на проверке
+  обновлений npm, поэтому скрипты вызывают инструменты из `node_modules/.bin` напрямую.
 - Пакетный менеджер: Swift Package Manager, CocoaPods не нужен.
 - Service worker в оболочке отключён (WKWebView его не поддерживает), сайт
   целиком лежит внутри приложения.
@@ -54,4 +60,6 @@ Product › Archive › Distribute App › TestFlight & App Store › Upload.
   Чтобы включить микрофон, позже можно подключить плагин
   `@capacitor-community/speech-recognition`.
 - Папки `node_modules/`, `www/`, `build/` и `ios/App/App/public/` в git не
-  попадают, они пересоздаются командами `npm install`, `npm run sync`, `release.sh`.
+  попадают, они пересоздаются командами `npm install`, `sh sync.sh`, `release.sh`.
+- Проверить без телефона: собрать для симулятора и запустить iPhone 17
+  (Xcode › Product › Run с выбранным симулятором).

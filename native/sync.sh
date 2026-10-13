@@ -14,5 +14,7 @@ rsync -a \
 # поэтому убираем его регистрацию из app.js в копии
 sed -i '' 's/navigator.serviceWorker.register("service-worker.js")/Promise.resolve()/' www/app.js
 
-npx cap sync ios
+# cap copy: копирует www/ и capacitor.config.json в iOS-проект без обращения к сети
+# (cap sync через npx зависал при плохой сети; плагинов у нас нет, поэтому copy достаточно)
+./node_modules/.bin/cap copy ios
 echo "✓ www/ обновлён, iOS-проект синхронизирован. Дальше: npm run open"

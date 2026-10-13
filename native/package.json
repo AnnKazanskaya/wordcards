@@ -6,7 +6,7 @@
   "scripts": {
     "sync": "sh sync.sh",
     "open": "cap open ios",
-    "icons": "capacitor-assets generate --ios --iconBackgroundColor '#4f46e5' --iconBackgroundColorDark '#4f46e5' --splashBackgroundColor '#15161b' --splashBackgroundColorDark '#15161b'"
+    "icons": "capacitor-assets generate --ios --iconBackgroundColor '#4f46e5' --iconBackgroundColorDark '#4f46e5' --splashBackgroundColor '#171a1f' --splashBackgroundColorDark '#171a1f'"
   },
   "dependencies": {
     "@capacitor/core": "^7",
