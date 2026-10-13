@@ -90,6 +90,7 @@ window.BOOKS = [
   },
   {
     id: "wrong-name",
+    private: true, // видна только владельцу приложения (см. OWNER_ID в app.js)
     title: "The Wrong Name",
     author: "оригинальная история · coffee shop AU",
     level: "A2",

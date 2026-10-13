@@ -1813,9 +1813,14 @@ function markChapterRead(book, ch) {
   const list = all[book.id] || [];
   if (!list.includes(ch.id)) { list.push(ch.id); all[book.id] = list; lsSet("bookRead", all); checkAchievements(false); }
 }
+// Личные книги (private: true) показываем только владельцу приложения, другим зарегистрировавшимся их нет
+const OWNER_ID = "2bf5a765-8759-444d-bb61-287be0f550d8";
+function visibleBooks() {
+  return (window.BOOKS || []).filter((b) => !b.private || (user && user.id === OWNER_ID));
+}
 function renderBooks() {
   el.booksList.innerHTML = "";
-  for (const b of window.BOOKS || []) {
+  for (const b of visibleBooks()) {
     const read = bookReadSet(b);
     const item = document.createElement("div"); item.className = "list-item";
     item.innerHTML = `
