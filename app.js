@@ -30,10 +30,11 @@ const el = {
   // decks / packs
   decksView: $("decksView"), decksList: $("decksList"),
   newDeckInput: $("newDeckInput"), newDeckBtn: $("newDeckBtn"), packsBtn: $("packsBtn"),
-  packsView: $("packsView"), packsList: $("packsList"),
+  packsView: $("packsView"), packsList: $("packsList"), catalogSearch: $("catalogSearch"),
   // deck
   deckView: $("deckView"), cardsList: $("cardsList"), studyBtn: $("studyBtn"),
   deckActions: $("deckActions"), scopeSeg: $("scopeSeg"), quizBtn: $("quizBtn"),
+  partRow: $("partRow"), partSeg: $("partSeg"),
   scrambleBtn: $("scrambleBtn"), matchBtn: $("matchBtn"),
   learnBtn: $("learnBtn"), writeBtn: $("writeBtn"),
   termInput: $("termInput"), defInput: $("defInput"), addCardBtn: $("addCardBtn"),
@@ -756,33 +757,90 @@ async function deleteDeck(deck) {
 // =========================================================
 //  ГОТОВЫЕ ПОДБОРКИ
 // =========================================================
+// Каталог: разделы из catalog.js (Gold, топ-100, неправильные, фразовые, темы), в каждом подборки ≤30 слов
+const CAT_PREVIEW = 6;                 // сколько подборок раздела показывать до «Показать все»
+const catExpanded = new Set();         // раскрытые разделы
 async function goPacks() {
-  showView("packs", "Готовые подборки", true);
+  showView("packs", "Каталог слов", true);
+  el.catalogSearch.value = "";
+  renderPacks();
   await Promise.all([loadDecksData(), loadAllCards()]);
   renderPacks();
 }
+el.catalogSearch.addEventListener("input", () => renderPacks());
+
+// состояние подборки у пользователя: есть ли такой набор и сколько слов ещё не добавлено
+function packState(p) {
+  const title = `${p.icon} ${p.name}`;
+  const existing = decks.find((d) => d.title === title);
+  if (!existing) return { existing: null, fresh: p.words.length };
+  const have = new Set(allCards.filter((c) => c.deck_id === existing.id).map((c) => c.term.toLowerCase()));
+  return { existing, fresh: p.words.filter(([t]) => !have.has(t.toLowerCase())).length };
+}
+function packMatches(p, q) {
+  if (!q) return true;
+  if (p.name.toLowerCase().includes(q) || (p.sub || "").toLowerCase().includes(q)) return true;
+  return p.words.some(([en, ru]) => en.toLowerCase().includes(q) || ru.toLowerCase().includes(q));
+}
 function renderPacks() {
+  const q = el.catalogSearch.value.trim().toLowerCase();
   el.packsList.innerHTML = "";
-  for (const p of window.PACKS) {
-    const title = `${p.icon} ${p.name}`;
-    const existing = decks.find((d) => d.title === title);
-    const have = existing ? new Set(allCards.filter((c) => c.deck_id === existing.id).map((c) => c.term.toLowerCase())) : new Set();
-    const fresh = p.words.filter(([t]) => !have.has(t.toLowerCase())).length;
-    const item = document.createElement("div");
-    item.className = "list-item";
-    item.innerHTML = `
-      <div class="li-icon">${p.icon}</div>
-      <div class="grow">
-        <div class="li-title"></div>
-        <div class="li-sub">${p.words.length} ${plural(p.words.length, "слово", "слова", "слов")}${existing ? (fresh ? ` · новых: ${fresh}` : " · уже добавлено") : ""}</div>
-      </div>
-      <span class="lvl ${p.level.toLowerCase()}">${p.level}</span>
-      <button class="btn btn-sm ${fresh ? "btn-primary" : "btn-ghost"}" style="margin-left:6px;">${fresh ? "Добавить" : "Открыть"}</button>`;
-    item.querySelector(".li-title").textContent = p.name;
-    item.querySelector("button").onclick = (e) => { e.stopPropagation(); addPack(p); };
-    item.onclick = () => addPack(p);
-    el.packsList.appendChild(item);
+  let shown = 0;
+  for (const sec of window.CATALOG) {
+    const packs = sec.packs.filter((p) => packMatches(p, q));
+    if (!packs.length) continue;
+    shown += packs.length;
+    const added = packs.filter((p) => packState(p).existing).length;
+    const wrap = document.createElement("div");
+    wrap.className = "cat-sec";
+    const head = document.createElement("div");
+    head.className = "cat-head";
+    head.style.background = sec.color; head.style.color = sec.ink || "#fff";
+    head.innerHTML = `<div class="grow"><div class="t"></div><div class="s"></div></div><div class="n"></div>`;
+    head.querySelector(".t").textContent = sec.title;
+    head.querySelector(".s").textContent = sec.subtitle || "";
+    head.querySelector(".n").textContent = added ? `${added} из ${packs.length}` : `${packs.length} ${plural(packs.length, "подборка", "подборки", "подборок")}`;
+    wrap.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "pack-grid";
+    const expanded = q || catExpanded.has(sec.id);
+    const list = expanded ? packs : packs.slice(0, CAT_PREVIEW);
+    for (const p of list) grid.appendChild(packCard(p, sec, q));
+    wrap.appendChild(grid);
+    if (!expanded && packs.length > CAT_PREVIEW) {
+      const more = document.createElement("button");
+      more.className = "btn btn-ghost btn-sm cat-more";
+      more.textContent = `Показать все ${packs.length} ›`;
+      more.onclick = () => { sfx.tap(); catExpanded.add(sec.id); renderPacks(); };
+      wrap.appendChild(more);
+    }
+    el.packsList.appendChild(wrap);
   }
+  if (!shown) el.packsList.innerHTML = '<div class="cat-empty">Ничего не нашлось. Попробуй другое слово.</div>';
+}
+function packCard(p, sec, q) {
+  const { existing, fresh } = packState(p);
+  const card = document.createElement("button");
+  card.className = "pack-card" + (existing && !fresh ? " done" : "");
+  const n = p.words.length;
+  // при поиске по слову показываем, какое слово нашлось
+  let sub = p.sub || "";
+  if (q) {
+    const hit = p.words.find(([en, ru]) => en.toLowerCase().includes(q) || ru.toLowerCase().includes(q));
+    if (hit && !p.name.toLowerCase().includes(q)) sub = `${hit[0]} — ${hit[1]}`;
+  }
+  const state = !existing ? "" : (fresh ? `<span class="state new">+${fresh} ${plural(fresh, "новое", "новых", "новых")}</span>` : '<span class="state done">✓ добавлено</span>');
+  card.innerHTML = `
+    <div class="top"><div class="ico">${p.icon}</div><span class="lvl ${(p.level || "a1").toLowerCase()}">${p.level || ""}</span></div>
+    <div class="name"></div>
+    <div class="sub"></div>
+    <div class="foot"><span>${n} ${plural(n, "слово", "слова", "слов")}</span>${state}</div>`;
+  card.querySelector(".ico").style.background = `color-mix(in srgb, ${sec.color} 18%, var(--surface))`;
+  card.querySelector(".name").textContent = p.name;
+  card.querySelector(".sub").textContent = sub;
+  card.onclick = () => { sfx.tap(); addPack(p); };
+  return card;
 }
 async function addPack(p) {
   const title = `${p.icon} ${p.name}`;
@@ -805,11 +863,55 @@ async function addPack(p) {
 // =========================================================
 //  CARDS (слова внутри набора)
 // =========================================================
+// Большой набор делим на части не больше 30 слов: part = 0 (все) или номер части
+const PART_SIZE = 30;
+let part = 0;
+function partRanges() {
+  if (cards.length <= PART_SIZE) return [];
+  const n = Math.ceil(cards.length / PART_SIZE);
+  const base = Math.floor(cards.length / n);
+  let extra = cards.length % n, i = 0;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const len = base + (extra > 0 ? 1 : 0); if (extra > 0) extra--;
+    out.push([i, i + len]); i += len;
+  }
+  return out;
+}
+function partList() {
+  const r = partRanges();
+  if (!part || !r.length) return cards.slice();
+  const [s, e] = r[Math.min(part, r.length) - 1];
+  return cards.slice(s, e);
+}
+function setPart(p) {
+  part = p;
+  if (currentDeck && currentDeck.id) lsSet("part_" + currentDeck.id, p);
+  renderCards();
+}
+function renderParts() {
+  const r = partRanges();
+  el.partRow.classList.toggle("hidden", !r.length);
+  if (!r.length) { part = 0; return; }
+  if (part > r.length) part = r.length;
+  el.partSeg.innerHTML = "";
+  const mk = (label, p, done) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (part === p ? " active" : "");
+    b.innerHTML = `${label}${done ? '<span class="d">✓</span>' : ""}`;
+    b.onclick = () => { sfx.tap(); setPart(p); };
+    el.partSeg.appendChild(b);
+  };
+  mk(`Все ${cards.length}`, 0, false);
+  r.forEach(([s, e], i) => mk(`${s + 1}–${e}`, i + 1, cards.slice(s, e).every(isLearned)));
+}
+
 let scope = "all"; // 'all' | 'unknown' | 'review'
 function studyList() {
-  if (scope === "unknown") return cards.filter((c) => !isLearned(c));
-  if (scope === "review") return cards.filter(isDue);
-  return cards.slice();
+  const base = partList();
+  if (scope === "unknown") return base.filter((c) => !isLearned(c));
+  if (scope === "review") return base.filter(isDue);
+  return base;
 }
 function setScope(s) {
   scope = s;
@@ -830,6 +932,7 @@ function frontIsEn() { return direction === "mix" ? Math.random() < 0.5 : direct
 async function openDeck(deck) {
   currentDeck = deck;
   lsSet("lastDeckId", deck.id);
+  part = deck.id ? lsGet("part_" + deck.id, 0) : 0;
   if (scope === "review" && !SRS_OK) setScope("all");
   showView("deck", deck.title, true);
   await loadCards();
@@ -863,8 +966,11 @@ async function loadCards() {
 
 function renderCards() {
   if (currentDeck && currentDeck.virtual) return;
-  const unknownCount = cards.filter((c) => !isLearned(c)).length;
-  const dueCount = cards.filter(isDue).length;
+  renderParts();
+  const shown = partList();
+  const unknownCount = shown.filter((c) => !isLearned(c)).length;
+  const dueCount = shown.filter(isDue).length;
+  el.scopeSeg.querySelector('[data-scope="all"]').textContent = part ? `Все (${shown.length})` : "Все";
   el.scopeSeg.querySelector('[data-scope="unknown"]').textContent = `Незнакомые (${unknownCount})`;
   const reviewBtn = el.scopeSeg.querySelector('[data-scope="review"]');
   reviewBtn.textContent = `Повторить (${dueCount})`;
@@ -877,7 +983,7 @@ function renderCards() {
   }
   el.deckActions.classList.remove("hidden");
   el.cardsList.innerHTML = "";
-  for (const card of cards) {
+  for (const card of shown) {
     const row = document.createElement("div");
     row.className = "card-row";
     const badge = isDue(card) ? '<span class="badge-due">⏰ повторить</span>' : (isLearned(card) ? '<span class="badge-learned">✓ выучено</span>' : "");
