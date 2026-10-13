@@ -1,6 +1,6 @@
 #!/bin/sh
 # Копирует сайт из корня репозитория в www/ и обновляет iOS-проект.
-# Запускать после каждого изменения сайта, перед сборкой в Xcode:  npm run sync
+# Запускать после каждого изменения сайта, перед сборкой в Xcode:  sh sync.sh
 set -e
 cd "$(dirname "$0")"
 
@@ -17,4 +17,4 @@ sed -i '' 's/navigator.serviceWorker.register("service-worker.js")/Promise.resol
 # cap copy: копирует www/ и capacitor.config.json в iOS-проект без обращения к сети
 # (cap sync через npx зависал при плохой сети; плагинов у нас нет, поэтому copy достаточно)
 ./node_modules/.bin/cap copy ios
-echo "✓ www/ обновлён, iOS-проект синхронизирован. Дальше: npm run open"
+echo "✓ www/ обновлён, iOS-проект синхронизирован. Дальше: bash release.sh или open ios/App/App.xcodeproj"
