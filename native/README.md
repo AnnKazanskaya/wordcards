@@ -3,63 +3,55 @@
 Это нативная оболочка сайта WordCards: тот же сайт, упакованный в приложение
 через Capacitor. Сайт лежит в корне репозитория, здесь только обёртка.
 
+Аккаунт разработчика: команда **KAMA Point s.r.o.** (Team ID `MP367L25PH`),
+Анна в ней с ролью Admin. Bundle ID приложения: `com.annakazanskaya.wordcards`.
+
 ## Что нужно один раз
 
-1. **Платный аккаунт Apple Developer** (99 $/год, developer.apple.com).
-   Без него TestFlight не работает. Бесплатный Apple ID позволяет только
-   поставить приложение на свой iPhone кабелем на 7 дней.
-2. Xcode (уже стоит). В Xcode: **Settings › Accounts › «+»** и войти своим Apple ID.
-3. На сайте App Store Connect (appstoreconnect.apple.com) создать приложение:
-   **My Apps › «+» › New App**, платформа iOS, имя `WordCards`,
-   Bundle ID `com.annakazanskaya.wordcards` (его нужно сначала зарегистрировать
-   в developer.apple.com › Identifiers, можно прямо из Xcode при выборе Team).
-
-4. В Xcode не установлена платформа iOS (при сборке пишет
-   «iOS 26.5 is not installed»). Один раз: **Xcode › Settings › Components**,
-   напротив **iOS 26.5** нажать «Get» (скачивание около 8 ГБ). Или в терминале:
+1. **Войти в Xcode своим Apple ID** (тем, что в команде KAMA):
+   Xcode › Settings › Accounts › «+» › Apple ID. После входа в списке
+   команд должна появиться KAMA Point s.r.o.
+2. **Установить платформу iOS** (иначе Xcode пишет «iOS 26.5 is not installed»):
+   Xcode › Settings › Components › iOS 26.5 › «Get», около 8 ГБ.
+   Или в терминале:
 
    ```bash
    xcodebuild -downloadPlatform iOS
    ```
 
-## Как собрать и отправить в TestFlight
+3. **Создать запись приложения в App Store Connect** (appstoreconnect.apple.com):
+   My Apps › «+» › New App: платформа iOS, имя `WordCards`, язык Russian,
+   Bundle ID `com.annakazanskaya.wordcards` (появится в списке после первой
+   сборки в Xcode, она регистрирует его автоматически), SKU `wordcards`.
 
-В терминале, в папке `native`:
+## Как отправить сборку в TestFlight
+
+В терминале:
 
 ```bash
-npm run sync
+cd ~/Desktop/Учёба/study/wordcards/native && bash release.sh
 ```
 
-Это копирует свежий сайт в `www/` и обновляет iOS-проект. Потом:
+Скрипт копирует свежий сайт в приложение, собирает архив и загружает его
+в App Store Connect. Номер сборки Xcode увеличивает сам.
 
-```bash
-npm run open
-```
+Через 10–15 минут: App Store Connect › WordCards › TestFlight › добавить себя
+в Internal Testing. На iPhone поставить приложение **TestFlight**, в нём
+появится WordCards. Каждое следующее обновление сайта: снова `bash release.sh`.
 
-Откроется Xcode. Дальше в Xcode:
-
-1. Слева выбрать проект **App**, вкладка **Signing & Capabilities**,
-   включить **Automatically manage signing** и выбрать свою **Team**.
-2. Сверху выбрать устройство **Any iOS Device (arm64)**.
-3. Меню **Product › Archive**. Подождать 1–3 минуты.
-4. В открывшемся окне **Distribute App › TestFlight & App Store › Upload**,
-   везде «Next», в конце «Upload».
-5. Через 5–15 минут сборка появится в App Store Connect › TestFlight.
-   Там добавить себя как тестировщика (Internal Testing) и установить
-   приложение **TestFlight** на iPhone, в нём появится WordCards.
-
-Каждое следующее обновление: `npm run sync`, в Xcode увеличить **Build**
-(General › Identity › Build: 1 › 2 › 3…), снова **Product › Archive › Upload**.
+Тот же путь руками через Xcode: `npm run open`, выбрать Any iOS Device,
+Product › Archive › Distribute App › TestFlight & App Store › Upload.
 
 ## Что важно знать
 
 - Иконки и заставка уже сгенерированы (`npm run icons` пересоздаёт их из `assets/logo.png`).
+- `npm run sync` только обновляет `www/` и iOS-проект без сборки.
 - Пакетный менеджер: Swift Package Manager, CocoaPods не нужен.
-- Service worker в оболочке отключён (WKWebView его не поддерживает), сайт и так
+- Service worker в оболочке отключён (WKWebView его не поддерживает), сайт
   целиком лежит внутри приложения.
 - Распознавание речи (упражнение «Произношение») в WKWebView недоступно, в
   оболочке кнопка микрофона работать не будет. Озвучка слов работает.
   Чтобы включить микрофон, позже можно подключить плагин
   `@capacitor-community/speech-recognition`.
-- Папки `node_modules/`, `www/` и `ios/App/App/public/` в git не попадают,
-  они пересоздаются командами `npm install` и `npm run sync`.
+- Папки `node_modules/`, `www/`, `build/` и `ios/App/App/public/` в git не
+  попадают, они пересоздаются командами `npm install`, `npm run sync`, `release.sh`.
