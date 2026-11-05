@@ -1049,6 +1049,12 @@ function renderCards() {
   const unknownCount = shown.filter((c) => !inSrs(c)).length;
   const dueCount = shown.filter(isDue).length;
   el.scopeSeg.querySelector('[data-scope="all"]').textContent = part ? `Все (${shown.length})` : "Все";
+  const dsL = cards.filter(isLearned).length, dsD = cards.filter(isDue).length;
+  $("dsWords").textContent = `${cards.length} ${plural(cards.length, "слово", "слова", "слов")}`;
+  $("dsLearned").textContent = `${dsL} выучено`;
+  $("dsDue").textContent = `${dsD} к повторению`;
+  $("dsDue").classList.toggle("hidden", !dsD);
+  $("dsBar").style.width = (cards.length ? Math.round(dsL / cards.length * 100) : 0) + "%";
   el.scopeSeg.querySelector('[data-scope="unknown"]').textContent = `Новые (${unknownCount})`;
   const reviewBtn = el.scopeSeg.querySelector('[data-scope="review"]');
   reviewBtn.textContent = `Повторить (${dueCount})`;
@@ -1963,13 +1969,13 @@ function renderDialogues() {
   el.dialoguesList.innerHTML = "";
   for (const d of window.DIALOGUES) {
     const n = Object.keys(d.nodes).length;
-    const item = document.createElement("div"); item.className = "list-item";
+    const item = document.createElement("button"); item.className = "rd-tile rd-sky";
     item.innerHTML = `
-      <div class="li-icon">${done[d.id] ? "✅" : d.icon}</div>
-      <div class="grow"><div class="li-title"></div><div class="li-sub"></div></div>
-      <span class="lvl ${d.level.toLowerCase()}">${d.level}</span>`;
-    item.querySelector(".li-title").textContent = d.title;
-    item.querySelector(".li-sub").textContent = `${d.who} · ${n} ${plural(n, "реплика", "реплики", "реплик")}${done[d.id] ? " · пройден" : ""}`;
+      <div class="rd-top"><span class="rd-lvl">${d.level}</span>${done[d.id] ? '<span class="rd-done">пройден</span>' : ""}</div>
+      <div class="rd-title"></div>
+      <div class="rd-sub"></div>`;
+    item.querySelector(".rd-title").textContent = d.title;
+    item.querySelector(".rd-sub").textContent = `${d.who} · ${n} ${plural(n, "реплика", "реплики", "реплик")}`;
     item.onclick = () => openDialogue(d);
     el.dialoguesList.appendChild(item);
   }
@@ -2034,13 +2040,12 @@ function renderStories() {
     const n = (s.text.match(/\p{L}+/gu) || []).length;
     const sc = scores[s.id];
     const badge = sc ? `<span class="score-badge ${sc.best === sc.total ? "" : "partial"}">${sc.best}/${sc.total}</span>` : "";
-    const item = document.createElement("div"); item.className = "list-item";
+    const item = document.createElement("button"); item.className = "rd-tile rd-" + s.level.toLowerCase();
     item.innerHTML = `
-      <div class="li-icon">${read.has(s.id) ? "✅" : "📖"}</div>
-      <div class="grow"><div class="li-title"></div><div class="li-sub">${n} ${plural(n, "слово", "слова", "слов")} · ${(s.tasks || []).length} ${plural((s.tasks || []).length, "задание", "задания", "заданий")}</div></div>
-      ${badge}
-      <span class="lvl ${s.level.toLowerCase()}">${s.level}</span>`;
-    item.querySelector(".li-title").textContent = s.title;
+      <div class="rd-top"><span class="rd-lvl">${s.level}</span>${badge || (read.has(s.id) ? '<span class="rd-done">прочитано</span>' : "")}</div>
+      <div class="rd-title"></div>
+      <div class="rd-sub">${n} ${plural(n, "слово", "слова", "слов")} · ${(s.tasks || []).length} ${plural((s.tasks || []).length, "задание", "задания", "заданий")}</div>`;
+    item.querySelector(".rd-title").textContent = s.title;
     item.onclick = () => openStory(s);
     el.storiesList.appendChild(item);
   }
