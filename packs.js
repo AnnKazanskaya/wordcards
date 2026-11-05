@@ -74,24 +74,24 @@ window.PACKS = [
     words: [
       ["flight", "рейс"], ["luggage", "багаж"], ["passport", "паспорт"], ["boarding", "посадка"],
       ["customs", "таможня"], ["currency", "валюта"], ["journey", "путешествие"], ["departure", "отправление"],
-      ["arrival", "прибытие"], ["accommodation", "проживание"], ["tourist", "турист"], ["souvenir", "сувенир"],
+      ["arrival", "прибытие"], ["accommodation", "жильё; проживание"], ["tourist", "турист"], ["souvenir", "сувенир"],
       ["abroad", "за границей"], ["map", "карта"], ["delay", "задержка"],
     ],
   },
   {
     id: "health", icon: "🏥", name: "Здоровье", level: "A2",
     words: [
-      ["illness", "болезнь"], ["headache", "головная боль"], ["fever", "температура"], ["cough", "кашель"],
+      ["illness", "болезнь"], ["headache", "головная боль"], ["fever", "жар; высокая температура"], ["cough", "кашель"],
       ["pharmacy", "аптека"], ["surgery", "операция"], ["allergy", "аллергия"], ["exhausted", "измотанный"],
-      ["dizzy", "головокружение"], ["treatment", "лечение"], ["pain", "боль"], ["doctor", "врач"],
+      ["dizzy", "чувствующий головокружение"], ["treatment", "лечение"], ["pain", "боль"], ["doctor", "врач"],
       ["nurse", "медсестра"], ["recovery", "выздоровление"], ["symptom", "симптом"],
     ],
   },
   {
     id: "tech", icon: "💻", name: "Техника", level: "A2",
     words: [
-      ["device", "устройство"], ["software", "программа"], ["password", "пароль"], ["download", "скачать"],
-      ["upload", "загрузить"], ["browser", "браузер"], ["application", "приложение"], ["charger", "зарядка"],
+      ["device", "устройство"], ["software", "программное обеспечение"], ["password", "пароль"], ["download", "скачивать"],
+      ["upload", "загружать"], ["browser", "браузер"], ["application", "приложение"], ["charger", "зарядное устройство"],
       ["screen", "экран"], ["keyboard", "клавиатура"], ["headphones", "наушники"], ["notification", "уведомление"],
       ["settings", "настройки"], ["update", "обновление"], ["wireless", "беспроводной"],
     ],
@@ -99,9 +99,9 @@ window.PACKS = [
   {
     id: "cooking", icon: "🍳", name: "Готовка", level: "A2",
     words: [
-      ["recipe", "рецепт"], ["ingredient", "ингредиент"], ["chop", "нарезать"], ["slice", "резать ломтиками"],
-      ["stir", "мешать"], ["bake", "печь"], ["boil", "кипятить"], ["fry", "жарить"], ["taste", "вкус"],
-      ["flavor", "аромат"], ["sweet", "сладкий"], ["sour", "кислый"], ["bitter", "горький"],
+      ["recipe", "рецепт"], ["ingredient", "ингредиент"], ["chop", "рубить; мелко нарезать"], ["slice", "резать ломтиками"],
+      ["stir", "помешивать; перемешивать"], ["bake", "печь"], ["boil", "варить; кипятить"], ["fry", "жарить"], ["taste", "вкус"],
+      ["flavor", "вкус; привкус"], ["sweet", "сладкий"], ["sour", "кислый"], ["bitter", "горький"],
       ["spicy", "острый"], ["fresh", "свежий"],
     ],
   },
@@ -117,10 +117,10 @@ window.PACKS = [
   {
     id: "phrases", icon: "💬", name: "Разговорные фразы", level: "B1",
     words: [
-      ["never mind", "не важно"], ["take your time", "не торопись"], ["it depends", "смотря как"],
+      ["never mind", "не важно"], ["take your time", "не торопись"], ["it depends", "как сказать; смотря по обстоятельствам"],
       ["I'm afraid", "боюсь, что"], ["by the way", "кстати"], ["as far as I know", "насколько я знаю"],
       ["make sense", "иметь смысл"], ["get along", "ладить"], ["look forward to", "ждать с нетерпением"],
-      ["run out of", "исчерпать"], ["figure out", "разобраться"], ["give up", "сдаваться"],
+      ["run out of", "закончиться (о запасах)"], ["figure out", "разобраться"], ["give up", "сдаваться"],
       ["put off", "откладывать"], ["turn out", "оказываться"], ["catch up", "нагнать"],
     ],
   },
