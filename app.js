@@ -351,6 +351,7 @@ function showView(name, title, showBack) {
   if (name !== "match" && match.timer) { clearInterval(match.timer); match.timer = null; }
   if (name !== "reader" && name !== "dialogue" && window.speechSynthesis) speechSynthesis.cancel();
   el.viewTitle.textContent = title;
+  el.appScreen.classList.toggle("on-home", name === "home");
   el.backBtn.classList.toggle("hidden", !showBack);
   const hideTabs = EXERCISE_VIEWS.includes(name) || name === "reader" || name === "dialogue";
   el.tabbar.classList.toggle("hidden", hideTabs);
@@ -487,9 +488,17 @@ async function goHome() {
   await Promise.all([loadAllCards(), loadDecksData(), flushLog().then(fetchServerLog)]);
   renderHome();
 }
+// цифры «набегают» при показе главной
+function countUp(node, to) {
+  const from = Number(node.textContent) || 0;
+  if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) { node.textContent = to; return; }
+  const t0 = performance.now(), dur = 600;
+  const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); node.textContent = Math.round(from + (to - from) * e); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
 function renderHome() {
   const log = mergedLog(), st = computeStreaks(log), today = log[dayKey()];
-  el.streakNum.textContent = st.current;
+  countUp(el.streakNum, st.current);
   el.streakLabel.textContent = `${plural(st.current, "день", "дня", "дней")} подряд`;
   el.streakFire.classList.toggle("off", !st.todayActive);
   el.streakToday.textContent = today && today.reviewed
@@ -497,12 +506,12 @@ function renderHome() {
     : (st.current > 0 ? "сегодня ещё не занималась, не теряй серию" : "начни сегодня, и серия пойдёт");
 
   const total = allCards.length, learned = allCards.filter(isLearned).length, learning = allCards.filter(isLearning).length;
-  el.homeTotal.textContent = total; el.homeLearned.textContent = learned; el.homeInProgress.textContent = learning;
+  el.homeTotal.textContent = total; countUp(el.homeLearned, learned); countUp(el.homeInProgress, learning);
 
   const due = SRS_OK ? allCards.filter(isDue).length : 0;
   el.reviewCta.classList.toggle("hidden", due === 0);
-  el.reviewCount.textContent = due;
-  el.reviewCtaSub.textContent = `${plural(due, "слово ждёт", "слова ждут", "слов ждут")} повторения`;
+  countUp(el.reviewCount, due);
+  el.reviewCtaSub.textContent = `${plural(due, "слово ждёт", "слова ждут", "слов ждут")} тебя`;
 
   const h = new Date().getHours();
   el.homeGreeting.textContent = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
@@ -522,7 +531,7 @@ function renderHome() {
 
   const p = lsGet("dailyPortion", null);
   const doneToday = p && p.day === dayKey() && p.done;
-  el.portionSub.textContent = doneToday ? "сегодня выполнена, можно взять ещё одну" : "4 упражнения по цепочке";
+  el.portionSub.textContent = doneToday ? "сегодня уже была, можно ещё одну" : "5 новых слов, 4 упражнения";
 
   const got = lsGet("achievements", {});
   el.homeAchSub.textContent = `${Object.keys(got).length} из ${ACHIEVEMENTS.length}`;
@@ -913,7 +922,7 @@ function packCard(p, sec, q) {
     <div class="name"></div>
     <div class="sub"></div>
     <div class="foot"><span>${n} ${plural(n, "слово", "слова", "слов")}</span>${state}</div>`;
-  card.querySelector(".ico").style.background = `color-mix(in srgb, ${sec.color} 18%, var(--surface))`;
+  card.style.background = sec.color; card.style.color = sec.ink || "#fff";
   card.querySelector(".name").textContent = p.name;
   card.querySelector(".sub").textContent = sub;
   card.onclick = () => { sfx.tap(); addPack(p); };
@@ -1050,10 +1059,9 @@ function renderCards() {
   const dueCount = shown.filter(isDue).length;
   el.scopeSeg.querySelector('[data-scope="all"]').textContent = part ? `Все (${shown.length})` : "Все";
   const dsL = cards.filter(isLearned).length, dsD = cards.filter(isDue).length;
-  $("dsWords").textContent = `${cards.length} ${plural(cards.length, "слово", "слова", "слов")}`;
-  $("dsLearned").textContent = `${dsL} выучено`;
-  $("dsDue").textContent = `${dsD} к повторению`;
-  $("dsDue").classList.toggle("hidden", !dsD);
+  $("dsWords").textContent = cards.length;
+  $("dsLearned").textContent = dsL;
+  $("dsDue").textContent = dsD;
   $("dsBar").style.width = (cards.length ? Math.round(dsL / cards.length * 100) : 0) + "%";
   el.scopeSeg.querySelector('[data-scope="unknown"]').textContent = `Новые (${unknownCount})`;
   const reviewBtn = el.scopeSeg.querySelector('[data-scope="review"]');
