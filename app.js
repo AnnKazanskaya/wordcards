@@ -190,17 +190,14 @@ const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
 const ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>';
 const ICON_BELL_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 6.5A6 6 0 0 1 18 11v5l1.5 2H9"/><path d="M6 11v5l-1.5 2H5"/><path d="M10 21a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></svg>';
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  el.themeBtn.innerHTML = t === "dark" ? ICON_SUN : ICON_MOON;
-  el.themeColorMeta.setAttribute("content", t === "dark" ? "#0b0b10" : "#f3f2f8");
-  lsSet("theme", t);
+function applyTheme() {   // только тёмная тема (решение Анны, ноябрь 2026)
+  document.documentElement.dataset.theme = "dark";
+  el.themeColorMeta.setAttribute("content", "#0b0b10");
 }
-applyTheme(lsGet("theme", null) || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-el.themeBtn.onclick = () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+applyTheme();
 
 let soundOn = lsGet("soundOn", true);
-function renderSoundBtn() { el.soundBtn.innerHTML = soundOn ? ICON_BELL : ICON_BELL_OFF; el.soundBtn.style.opacity = soundOn ? "1" : ".55"; }
+function renderSoundBtn() { el.soundBtn.textContent = soundOn ? "Звуки включены" : "Звуки выключены"; }
 renderSoundBtn();
 el.soundBtn.onclick = () => { soundOn = !soundOn; lsSet("soundOn", soundOn); renderSoundBtn(); if (soundOn) sfx.correct(); };
 
@@ -632,6 +629,7 @@ function renderStats() {
   const max = Math.max(1, ...vals);
   const names = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
   el.weekBars.innerHTML = "";
+  if (!vals.some(Boolean)) { el.weekBars.innerHTML = '<div class="bars-empty">На этой неделе ответов пока нет. Открой любой набор и нажми «Учить».</div>'; return; }
   days.forEach((d, i) => {
     const [y, m, dd] = d.split("-").map(Number);
     const col = document.createElement("div"); col.className = "bar-col";
@@ -750,33 +748,22 @@ function deckIcon(title) {
   const letter = (title.match(/\p{L}/u) || [title[0] || "?"])[0].toUpperCase();
   return { emoji: null, letter, rest: title };
 }
+const DECK_TONES = ["lilac", "lime", "coral", "mint", "sky", "peach", "sun"];
+function deckTone(title) { let h = 0; for (const ch of title) h = (h * 31 + ch.codePointAt(0)) >>> 0; return DECK_TONES[h % DECK_TONES.length]; }
 function deckCard(deck) {
   const s = deckStats(deck.id);
   const pct = s.total ? Math.round((s.learned / s.total) * 100) : 0;
-  const color = deckColor(deck.title);
   const ic = deckIcon(deck.title);
   const card = document.createElement("button");
-  card.className = "deck-card";
-  let sub;
-  if (!s.total) sub = "<span>пусто, открой и добавь слова</span>";
-  else {
-    sub = `<span>${s.total} ${plural(s.total, "слово", "слова", "слов")}</span>`;
-    if (s.learned === s.total) sub += '<span class="dk-done">✓ всё выучено</span>';
-    else if (s.learned) sub += `<span>${s.learned} выучено</span>`;
-    if (s.due) sub += `<span class="dk-due">⏰ ${s.due} к повторению</span>`;
-  }
+  card.className = "dk6 dk-" + deckTone(deck.title);
+  const sub = !s.total ? "пусто, добавь слова" : `${s.total} ${plural(s.total, "слово", "слова", "слов")} · ${s.learned} выучено`;
   card.innerHTML = `
-    <div class="dk-ico ${ic.emoji ? "emoji" : ""}"></div>
-    <div class="grow">
-      <div class="dk-title"></div>
-      <div class="dk-sub">${sub}</div>
-      <div class="dk-bar ${s.total ? "" : "hidden"}"><div class="pbar"><div style="width:${pct}%"></div></div><span class="dk-pct">${pct}%</span></div>
-    </div>
-    <span class="dk-chev">›</span>`;
-  const tile = card.querySelector(".dk-ico");
-  tile.textContent = ic.emoji || ic.letter;
-  tile.style.background = ic.emoji ? `color-mix(in srgb, ${color} 18%, var(--surface))` : color;
-  card.querySelector(".dk-title").textContent = ic.rest;
+    <div class="dk6-top"><span class="dk6-ico"></span>${s.due ? `<span class="dk6-due">${s.due} повторить</span>` : ""}</div>
+    <div class="dk6-title"></div>
+    <div class="dk6-sub">${sub}</div>
+    <div class="pbar ${s.total ? "" : "hidden"}"><div style="width:${pct}%"></div></div>`;
+  card.querySelector(".dk6-ico").textContent = ic.emoji || ic.letter;
+  card.querySelector(".dk6-title").textContent = ic.rest;
   card.onclick = () => { sfx.tap(); openDeck(deck); };
   return card;
 }
