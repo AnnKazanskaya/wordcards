@@ -26,6 +26,7 @@ const el = {
   submitBtn: $("submitBtn"), authMsg: $("authMsg"), forgotBtn: $("forgotBtn"), authTabs: document.querySelector(".tabs"),
   backBtn: $("backBtn"), viewTitle: $("viewTitle"), logoutBtn: $("logoutBtn"),
   soundBtn: $("soundBtn"), themeBtn: $("themeBtn"), tabbar: $("tabbar"),
+  voiceBtn: $("voiceBtn"), voiceSheet: $("voiceSheet"), voiceList: $("voiceList"), voiceCloseBtn: $("voiceCloseBtn"),
   // home
   homeView: $("homeView"), streakFire: $("streakFire"), streakNum: $("streakNum"),
   streakLabel: $("streakLabel"), streakToday: $("streakToday"),
@@ -139,15 +140,79 @@ function toast(text) {
   toast._t = setTimeout(() => el.toast.classList.remove("show"), 1800);
 }
 
-function speak(text) {
+// ---------- голос озвучки ----------
+// Порядок предпочтения: сначала самые естественные женские голоса (на iPhone это Samantha,
+// в Chrome — Google US English, в Edge — Aria/Jenny), затем любой английский.
+// На устройствах с русским языком системы имена голосов приходят по-русски («Саманта»), поэтому
+// ищем и по английскому, и по русскому имени, и по идентификатору (voiceURI).
+const VOICE_PREF = [["Samantha", "Саманта"], ["Google US English"], ["Microsoft Aria"], ["Microsoft Jenny"], ["Microsoft Michelle"], ["Microsoft Zira"],
+  ["Ava", "Ава"], ["Allison", "Эллисон"], ["Nicky", "Ники"], ["Zoe", "Зои"], ["Karen", "Карен"], ["Moira", "Мойра"], ["Tessa", "Тесса"],
+  ["Kate", "Кейт"], ["Serena", "Серена"], ["Martha", "Марта"], ["Catherine", "Кэтрин"], ["Fiona", "Фиона"], ["Susan", "Сьюзан"], ["Google UK English Female"]];
+// Шуточные и роботизированные голоса Apple — в список не показываем
+const VOICE_NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Wobble|Zarvox|Trinoids|Whisper|Jester|Organ|Pipe Organ|Superstar|Good News|Junior|Ralph|Fred|Kathy|Hysterical|Deranged|Bruce|Agnes|Princess|Vicki|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|Альберт|Плохие новости|Бах|Колокольчик|Прыг-скок|Пузырьки|Виолончель|Воббл|Зарвокс|Триноид|Шепот|Шёпот|Шутник|Орган|Суперзвезда|Хорошие новости|Джуниор|Ральф|Фред|Кэти|Бабушка|Дедушка|Истерика|Психоз|Брюс|Агнес|Принцесса|Вики)(?![a-zа-яё])/i;
+let voiceURI = lsGet("voiceURI", "");
+let cachedVoice = null;
+function voiceQuality(v) { return /premium/i.test(v.voiceURI) ? 2 : /enhanced/i.test(v.voiceURI) ? 1 : 0; }
+function voiceTail(v) { return (v.voiceURI || "").split(/[.:/]/).pop(); }
+function isNovelty(v) { return VOICE_NOVELTY.test(v.name) || VOICE_NOVELTY.test(voiceTail(v)); }
+function enVoices() {
+  if (!window.speechSynthesis) return [];
+  return speechSynthesis.getVoices().filter((v) => /^en[-_]/i.test(v.lang) && !isNovelty(v));
+}
+function voiceMatches(v, key) {
+  const re = new RegExp("(^|[^a-zа-яё])" + key.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^a-zа-яё])", "i");
+  return re.test(v.name) || re.test(v.voiceURI || "");
+}
+function prefRank(v) { const i = VOICE_PREF.findIndex((keys) => keys.some((k) => voiceMatches(v, k))); return i < 0 ? 99 : i; }
+function sortedVoices() {
+  return enVoices().sort((a, b) => prefRank(a) - prefRank(b) || voiceQuality(b) - voiceQuality(a) || a.name.localeCompare(b.name));
+}
+function pickVoice() {
+  if (cachedVoice) return cachedVoice;
+  const all = sortedVoices();
+  if (!all.length) return null;
+  cachedVoice = (voiceURI && all.find((v) => v.voiceURI === voiceURI)) || all[0];
+  return cachedVoice;
+}
+function speak(text, voice) {
   if (!window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US";
-  const v = speechSynthesis.getVoices().find((v) => v.lang.startsWith("en"));
-  if (v) u.voice = v;
+  u.rate = 0.95;
+  const v = voice || pickVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
 }
+function voiceLabel(v) {
+  if (!v) return "";
+  const q = voiceQuality(v) === 2 ? " · премиум" : voiceQuality(v) === 1 ? " · улучшенный" : "";
+  return v.name.replace(/\s*\((Enhanced|Premium)\)/i, "") + q;
+}
+function renderVoiceBtn() {
+  if (!el.voiceBtn) return;
+  const v = pickVoice();
+  el.voiceBtn.textContent = v ? "Голос: " + voiceLabel(v) : "Голос озвучки";
+}
+function renderVoiceList() {
+  const list = sortedVoices();
+  const cur = pickVoice();
+  el.voiceList.innerHTML = list.length ? "" : '<div class="hint">Английских голосов на этом устройстве не найдено</div>';
+  list.forEach((v) => {
+    const b = document.createElement("button");
+    b.className = "voice-item" + (cur && v.voiceURI === cur.voiceURI ? " on" : "");
+    const name = document.createElement("span"); name.className = "voice-name"; name.textContent = voiceLabel(v);
+    const lang = document.createElement("span"); lang.className = "voice-lang"; lang.textContent = v.lang.replace("_", "-");
+    b.append(name, lang);
+    b.onclick = () => {
+      voiceURI = v.voiceURI; lsSet("voiceURI", voiceURI); cachedVoice = v;
+      speak("Hello, Anna! Let's learn some new words today.", v);
+      renderVoiceList(); renderVoiceBtn();
+    };
+    el.voiceList.appendChild(b);
+  });
+}
+if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", () => { cachedVoice = null; renderVoiceBtn(); });
 
 function inSrs(card) { return (card.interval_days || 0) > 0; }                       // уже в графике повторений
 function isLearned(card) { return (card.interval_days || 0) >= LEARNED_INTERVAL; }  // дошло до повторения раз в 2 недели
@@ -200,6 +265,9 @@ let soundOn = lsGet("soundOn", true);
 function renderSoundBtn() { el.soundBtn.textContent = soundOn ? "Звуки включены" : "Звуки выключены"; }
 renderSoundBtn();
 el.soundBtn.onclick = () => { soundOn = !soundOn; lsSet("soundOn", soundOn); renderSoundBtn(); if (soundOn) sfx.correct(); };
+renderVoiceBtn();
+el.voiceBtn.onclick = () => { renderVoiceList(); openSheet(el.voiceSheet); };
+el.voiceCloseBtn.onclick = closeSheets;
 
 // короткие звуки через Web Audio (без файлов)
 const sfx = (() => {
@@ -1300,11 +1368,8 @@ function startStudy(override, opts) {
   const list = override || studyList();
   if (!list.length) { toast(scope === "review" ? "Повторять пока нечего 🎉" : "Новых слов нет, переключись на «Все»"); return; }
   const intro = !!(opts && opts.intro);
-  session = { list: intro ? list.slice() : shuffle(list), index: 0, flipped: false, correct: 0, missed: [], intro, front: "en" };
-  el.studyChoices.classList.toggle("hidden", intro);
-  el.introNext.classList.toggle("hidden", !intro);
+  session = { list: intro ? list.slice() : shuffle(list), index: 0, flipped: false, correct: 0, missed: [], intro, front: "en", revealed: false };
   el.flashSub.classList.toggle("hidden", !intro);
-  el.flashHint.textContent = intro ? "запомни слово и перевод" : "нажми на карточку, чтобы перевернуть";
   showView("study", currentDeck.title, true);
   showCard();
 }
@@ -1320,8 +1385,12 @@ function showCard() {
   const card = session.list[session.index];
   if (!card) return;
   session.flipped = false;
+  session.revealed = false;                                                            // перевод после «Не знаю» ещё не показан
   session.front = session.intro ? "en" : (frontIsEn() ? "en" : "ru");
   if (session.intro) el.flashSub.textContent = card.definition;
+  el.studyChoices.classList.toggle("hidden", !!session.intro);
+  el.introNext.classList.toggle("hidden", !session.intro);
+  el.flashHint.textContent = session.intro ? "запомни слово и перевод" : "нажми на карточку, чтобы перевернуть";
   renderFlash();
   el.studyProgress.textContent = `${session.index + 1} из ${session.list.length}`;
   pop(el.flashcard);
@@ -1333,11 +1402,7 @@ el.flashcard.onclick = (e) => {
   session.flipped = !session.flipped;
   renderFlash();
 };
-el.introNext.onclick = () => {
-  sfx.tap();
-  session.index++;
-  if (session.index >= session.list.length) finishStudy(); else showCard();
-};
+el.introNext.onclick = () => { sfx.tap(); nextCard(); };
 el.speakBtn.onclick = (e) => { e.stopPropagation(); const card = session.list[session.index]; if (card) speak(card.term); };
 el.quizSpeak.onclick = () => { const card = quiz.list[quiz.index]; if (card) speak(card.term); };
 
@@ -1349,6 +1414,20 @@ function answer(known) {
   if (!card) return;
   gradeCard(card, known);
   if (known) session.correct++; else session.missed.push(card);
+  // «Не знаю»: не листаем дальше, а показываем обратную сторону (перевод) и кнопку «Дальше»
+  if (!known && !session.flipped) {
+    session.flipped = true;
+    session.revealed = true;
+    renderFlash();
+    pop(el.flashcard);
+    el.studyChoices.classList.add("hidden");
+    el.introNext.classList.remove("hidden");
+    el.flashHint.textContent = "запомни и нажми «Дальше»";
+    return;
+  }
+  nextCard();
+}
+function nextCard() {
   session.index++;
   if (session.index >= session.list.length) finishStudy();
   else showCard();
