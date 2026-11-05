@@ -26,7 +26,6 @@ const el = {
   submitBtn: $("submitBtn"), authMsg: $("authMsg"), forgotBtn: $("forgotBtn"), authTabs: document.querySelector(".tabs"),
   backBtn: $("backBtn"), viewTitle: $("viewTitle"), logoutBtn: $("logoutBtn"),
   soundBtn: $("soundBtn"), themeBtn: $("themeBtn"), tabbar: $("tabbar"),
-  voiceBtn: $("voiceBtn"), voiceSheet: $("voiceSheet"), voiceList: $("voiceList"), voiceCloseBtn: $("voiceCloseBtn"),
   // home
   homeView: $("homeView"), streakFire: $("streakFire"), streakNum: $("streakNum"),
   streakLabel: $("streakLabel"), streakToday: $("streakToday"),
@@ -140,79 +139,86 @@ function toast(text) {
   toast._t = setTimeout(() => el.toast.classList.remove("show"), 1800);
 }
 
-// ---------- голос озвучки ----------
-// Порядок предпочтения: сначала самые естественные женские голоса (на iPhone это Samantha,
-// в Chrome — Google US English, в Edge — Aria/Jenny), затем любой английский.
-// На устройствах с русским языком системы имена голосов приходят по-русски («Саманта»), поэтому
-// ищем и по английскому, и по русскому имени, и по идентификатору (voiceURI).
-const VOICE_PREF = [["Samantha", "Саманта"], ["Google US English"], ["Microsoft Aria"], ["Microsoft Jenny"], ["Microsoft Michelle"], ["Microsoft Zira"],
-  ["Ava", "Ава"], ["Allison", "Эллисон"], ["Nicky", "Ники"], ["Zoe", "Зои"], ["Karen", "Карен"], ["Moira", "Мойра"], ["Tessa", "Тесса"],
-  ["Kate", "Кейт"], ["Serena", "Серена"], ["Martha", "Марта"], ["Catherine", "Кэтрин"], ["Fiona", "Фиона"], ["Susan", "Сьюзан"], ["Google UK English Female"]];
-// Шуточные и роботизированные голоса Apple — в список не показываем
-const VOICE_NOVELTY = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Wobble|Zarvox|Trinoids|Whisper|Jester|Organ|Pipe Organ|Superstar|Good News|Junior|Ralph|Fred|Kathy|Hysterical|Deranged|Bruce|Agnes|Princess|Vicki|Grandma|Grandpa|Eddy|Flo|Reed|Rocko|Sandy|Shelley|Альберт|Плохие новости|Бах|Колокольчик|Прыг-скок|Пузырьки|Виолончель|Воббл|Зарвокс|Триноид|Шепот|Шёпот|Шутник|Орган|Суперзвезда|Хорошие новости|Джуниор|Ральф|Фред|Кэти|Бабушка|Дедушка|Истерика|Психоз|Брюс|Агнес|Принцесса|Вики)(?![a-zа-яё])/i;
-let voiceURI = lsGet("voiceURI", "");
+// ---------- озвучка ----------
+// Как в Chat & Chill: одно слово по возможности читает живой диктор (запись из словаря dictionaryapi.dev),
+// фразы и тексты — лучший из голосов устройства (Natural / Google / Samantha), а не первый попавшийся.
+// Имена голосов на устройствах с русским языком приходят по-русски («Саманта»), поэтому ищем оба варианта.
+const REC_KEY = "recAudio";
+const recCache = lsGet(REC_KEY, {});   // слово → url записи, "" = записи в словаре нет
+const recReady = new Map();            // слово → заранее загруженный Audio, чтобы звучало сразу
+let curAudio = null;
 let cachedVoice = null;
+function voiceRank(v) {
+  const n = v.name + " " + (v.voiceURI || "");
+  if (/natural|neural/i.test(n)) return 0;
+  if (/Google UK English Female|Google US English/i.test(n)) return 1;
+  if (/Samantha|Саманта|Ava|Ава|Allison|Эллисон|Zoe|Зои|Nicky|Ники|Microsoft (Aria|Jenny)/i.test(n)) return 2;
+  if (/Serena|Серена|Karen|Карен|Moira|Мойра|Tessa|Тесса|Kate|Кейт|Martha|Марта|Fiona|Фиона|Catherine|Кэтрин|Microsoft (Michelle|Zira)/i.test(n)) return 3;
+  if (/Daniel|Дэниэл|Arthur|Артур|Aaron|Аарон|Google/i.test(n)) return 4;
+  return 9;
+}
 function voiceQuality(v) { return /premium/i.test(v.voiceURI) ? 2 : /enhanced/i.test(v.voiceURI) ? 1 : 0; }
-function voiceTail(v) { return (v.voiceURI || "").split(/[.:/]/).pop(); }
-function isNovelty(v) { return VOICE_NOVELTY.test(v.name) || VOICE_NOVELTY.test(voiceTail(v)); }
-function enVoices() {
-  if (!window.speechSynthesis) return [];
-  return speechSynthesis.getVoices().filter((v) => /^en[-_]/i.test(v.lang) && !isNovelty(v));
-}
-function voiceMatches(v, key) {
-  const re = new RegExp("(^|[^a-zа-яё])" + key.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^a-zа-яё])", "i");
-  return re.test(v.name) || re.test(v.voiceURI || "");
-}
-function prefRank(v) { const i = VOICE_PREF.findIndex((keys) => keys.some((k) => voiceMatches(v, k))); return i < 0 ? 99 : i; }
-function sortedVoices() {
-  return enVoices().sort((a, b) => prefRank(a) - prefRank(b) || voiceQuality(b) - voiceQuality(a) || a.name.localeCompare(b.name));
-}
-function pickVoice() {
+function bestVoice() {
   if (cachedVoice) return cachedVoice;
-  const all = sortedVoices();
-  if (!all.length) return null;
-  cachedVoice = (voiceURI && all.find((v) => v.voiceURI === voiceURI)) || all[0];
+  if (!window.speechSynthesis) return null;
+  const vs = speechSynthesis.getVoices().filter((v) => /^en(-|_|$)/i.test(v.lang));
+  cachedVoice = vs.sort((a, b) => voiceRank(a) - voiceRank(b) || voiceQuality(b) - voiceQuality(a))[0] || null;
   return cachedVoice;
 }
-function speak(text, voice) {
+function synth(text) {
   if (!window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-US";
+  const v = bestVoice();
+  if (v) { u.voice = v; u.lang = v.lang; } else u.lang = "en-US";
   u.rate = 0.95;
-  const v = voice || pickVoice();
-  if (v) { u.voice = v; u.lang = v.lang; }
   speechSynthesis.cancel();
   speechSynthesis.speak(u);
 }
-function voiceLabel(v) {
-  if (!v) return "";
-  const q = voiceQuality(v) === 2 ? " · премиум" : voiceQuality(v) === 1 ? " · улучшенный" : "";
-  return v.name.replace(/\s*\((Enhanced|Premium)\)/i, "") + q;
+function wordKey(text) { const t = (text || "").trim(); return /^[a-z'-]{2,}$/i.test(t) ? t.toLowerCase() : null; }
+async function recordedUrl(word) {
+  if (word in recCache) return recCache[word] || null;
+  try {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
+    const r = await fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(word), { signal: ctl.signal });
+    clearTimeout(t);
+    if (r.status === 404) { recCache[word] = ""; lsSet(REC_KEY, recCache); return null; }
+    if (!r.ok) return null;
+    const d = await r.json();
+    const ph = (Array.isArray(d) ? d.flatMap((x) => x.phonetics || []) : []).map((p) => p.audio).filter(Boolean);
+    const url = ph.find((a) => /-uk\.mp3$/.test(a)) || ph.find((a) => /-us\.mp3$/.test(a)) || ph[0] || "";
+    recCache[word] = url; lsSet(REC_KEY, recCache);
+    return url || null;
+  } catch (_) { return null; }   // нет сети: не запоминаем, попробуем в другой раз
 }
-function renderVoiceBtn() {
-  if (!el.voiceBtn) return;
-  const v = pickVoice();
-  el.voiceBtn.textContent = v ? "Голос: " + voiceLabel(v) : "Голос озвучки";
-}
-function renderVoiceList() {
-  const list = sortedVoices();
-  const cur = pickVoice();
-  el.voiceList.innerHTML = list.length ? "" : '<div class="hint">Английских голосов на этом устройстве не найдено</div>';
-  list.forEach((v) => {
-    const b = document.createElement("button");
-    b.className = "voice-item" + (cur && v.voiceURI === cur.voiceURI ? " on" : "");
-    const name = document.createElement("span"); name.className = "voice-name"; name.textContent = voiceLabel(v);
-    const lang = document.createElement("span"); lang.className = "voice-lang"; lang.textContent = v.lang.replace("_", "-");
-    b.append(name, lang);
-    b.onclick = () => {
-      voiceURI = v.voiceURI; lsSet("voiceURI", voiceURI); cachedVoice = v;
-      speak("Hello, Anna! Let's learn some new words today.", v);
-      renderVoiceList(); renderVoiceBtn();
-    };
-    el.voiceList.appendChild(b);
+function prefetchSpeech(text, preload) {
+  const w = wordKey(text);
+  if (!w || recReady.has(w)) return;
+  recordedUrl(w).then((url) => {
+    if (!url || !preload || recReady.has(w)) return;
+    try { const a = new Audio(url); a.preload = "auto"; a.load(); recReady.set(w, a); } catch (_) {}
   });
 }
-if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", () => { cachedVoice = null; renderVoiceBtn(); });
+// Перед упражнением узнаём записи для всех слов списка, первые несколько грузим целиком
+function prefetchList(list) { (list || []).slice(0, 60).forEach((c, i) => prefetchSpeech(c.term, i < 8)); }
+function speak(text) {
+  const t = (text || "").trim();
+  if (!t) return;
+  try { if (curAudio) curAudio.pause(); } catch (_) {}
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  const w = wordKey(t);
+  if (w) {
+    const pre = recReady.get(w);
+    if (pre) { try { pre.currentTime = 0; curAudio = pre; pre.play().catch(() => synth(t)); return; } catch (_) {} }
+    if (recCache[w] === "") { synth(t); return; }   // записи нет: голос устройства сразу, без ожидания
+    recordedUrl(w).then((url) => {
+      if (!url) { synth(t); return; }
+      try { const a = new Audio(url); curAudio = a; recReady.set(w, a); a.play().catch(() => synth(t)); } catch (_) { synth(t); }
+    });
+    return;
+  }
+  synth(t);
+}
+if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", () => { cachedVoice = null; });
 
 function inSrs(card) { return (card.interval_days || 0) > 0; }                       // уже в графике повторений
 function isLearned(card) { return (card.interval_days || 0) >= LEARNED_INTERVAL; }  // дошло до повторения раз в 2 недели
@@ -265,9 +271,6 @@ let soundOn = lsGet("soundOn", true);
 function renderSoundBtn() { el.soundBtn.textContent = soundOn ? "Звуки включены" : "Звуки выключены"; }
 renderSoundBtn();
 el.soundBtn.onclick = () => { soundOn = !soundOn; lsSet("soundOn", soundOn); renderSoundBtn(); if (soundOn) sfx.correct(); };
-renderVoiceBtn();
-el.voiceBtn.onclick = () => { renderVoiceList(); openSheet(el.voiceSheet); };
-el.voiceCloseBtn.onclick = closeSheets;
 
 // короткие звуки через Web Audio (без файлов)
 const sfx = (() => {
@@ -1369,6 +1372,7 @@ function startStudy(override, opts) {
   if (!list.length) { toast(scope === "review" ? "Повторять пока нечего 🎉" : "Новых слов нет, переключись на «Все»"); return; }
   const intro = !!(opts && opts.intro);
   session = { list: intro ? list.slice() : shuffle(list), index: 0, flipped: false, correct: 0, missed: [], intro, front: "en", revealed: false };
+  prefetchList(session.list);
   el.flashSub.classList.toggle("hidden", !intro);
   showView("study", currentDeck.title, true);
   showCard();
@@ -1448,6 +1452,7 @@ function startQuiz(override) {
   if (!list.length) { toast("Нет слов для игры"); return; }
   if (cards.length < 2) { toast("Добавь хотя бы 2 слова"); return; }
   quiz = { list: shuffle(list), index: 0, score: 0, answered: false, missed: [] };
+  prefetchList(quiz.list);
   showView("quiz", currentDeck.title, true);
   showQuestion();
 }
@@ -1506,6 +1511,7 @@ function startWrite(override, dictation) {
   const list = override || studyList();
   if (!list.length) { toast("Нет слов для игры"); return; }
   write = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], dictation: !!dictation };
+  prefetchList(write.list);
   el.writeSide.textContent = dictation ? "Послушай и напиши" : "Напиши по-английски";
   el.writeSpeak.classList.toggle("hidden", !dictation);
   showView("write", currentDeck.title, true);
@@ -1565,6 +1571,7 @@ function startPron(override) {
   const list = override || studyList();
   if (!list.length) { toast("Нет слов для игры"); return; }
   pron = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], rec: null };
+  prefetchList(pron.list);
   showView("pron", currentDeck.title, true);
   showPron();
 }
@@ -1660,6 +1667,7 @@ function startLearn(override) {
   if (!list.length) { toast("Нет слов для игры"); return; }
   if (cards.length < 2) { toast("Добавь хотя бы 2 слова"); return; }
   learn = { list: shuffle(list), index: 0, score: 0, locked: false, missed: [], mode: "choice" };
+  prefetchList(learn.list);
   showView("learn", currentDeck.title, true);
   showLearn();
 }
@@ -1742,6 +1750,7 @@ function startScramble(override) {
   const list = override || studyList();
   if (!list.length) { toast("Нет слов для игры"); return; }
   scramble = { list: shuffle(list), index: 0, score: 0, tiles: [], answer: [], display: "", targetLetters: "", locked: false, missed: [] };
+  prefetchList(scramble.list);
   showView("scramble", currentDeck.title, true);
   showScramble();
 }
