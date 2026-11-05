@@ -4,8 +4,14 @@
 const SUPABASE_URL = "https://mxysxubcklvjsgltogtp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_nLFuOAa_Wf2_zibgAk2KRQ_np2JfZv7";
 
-const LEARNED_AT = 3;                 // слово "выучено" после 3 правильных подряд
-const SRS_STEPS = [1, 3, 7, 14, 30, 60]; // через сколько дней повторять выученное
+// Как слово становится выученным:
+//  1) 3 верных ответа подряд → слово попадает в график повторений (интервал 1 день);
+//  2) каждое верное повторение В СРОК (не раньше) двигает интервал: 1 › 3 › 7 › 14 › 30 › 60 дней;
+//  3) ошибка откатывает на шаг назад; досрочные ответы на график не влияют;
+//  4) «выучено» = дошло до интервала 14 дней, то есть вспомнилось через день, три и неделю.
+const ENTER_SRS_AT = 3;
+const LEARNED_INTERVAL = 14;
+const SRS_STEPS = [1, 3, 7, 14, 30, 60];
 const DAY_MS = 86400000;
 
 // =========================================================
@@ -23,7 +29,8 @@ const el = {
   // home
   homeView: $("homeView"), streakFire: $("streakFire"), streakNum: $("streakNum"),
   streakLabel: $("streakLabel"), streakToday: $("streakToday"),
-  reviewCta: $("reviewCta"), reviewCtaSub: $("reviewCtaSub"),
+  reviewCta: $("reviewCta"), reviewCtaSub: $("reviewCtaSub"), reviewCount: $("reviewCount"),
+  homeGreeting: $("homeGreeting"), homeDate: $("homeDate"),
   homeTotal: $("homeTotal"), homeLearned: $("homeLearned"), homeInProgress: $("homeInProgress"),
   lastDeckCta: $("lastDeckCta"), lastDeckTitle: $("lastDeckTitle"), lastDeckSub: $("lastDeckSub"),
   homeReadCta: $("homeReadCta"), homeReadSub: $("homeReadSub"), homePacksCta: $("homePacksCta"),
@@ -142,9 +149,13 @@ function speak(text) {
   speechSynthesis.speak(u);
 }
 
-function isLearned(card) { return card.correct_streak >= LEARNED_AT; }
-function isDue(card) { return !!card.next_review_at && new Date(card.next_review_at) <= new Date(); }
+function inSrs(card) { return (card.interval_days || 0) > 0; }                       // уже в графике повторений
+function isLearned(card) { return (card.interval_days || 0) >= LEARNED_INTERVAL; }  // дошло до повторения раз в 2 недели
+function isLearning(card) { return inSrs(card) && !isLearned(card); }                // в графике, но ещё не выучено
+function isDue(card) { return inSrs(card) && !!card.next_review_at && new Date(card.next_review_at) <= new Date(); }
 function nextInterval(cur) { for (const s of SRS_STEPS) if (s > cur) return s; return SRS_STEPS[SRS_STEPS.length - 1]; }
+function prevInterval(cur) { let p = 0; for (const s of SRS_STEPS) { if (s >= cur) break; p = s; } return p; }
+function daysUntil(iso) { return Math.max(0, Math.ceil((new Date(iso) - Date.now()) / DAY_MS)); }
 
 function shuffle(a) {
   a = a.slice();
@@ -175,17 +186,21 @@ function shiftDay(key, delta) { const [y, m, d] = key.split("-").map(Number); re
 // =========================================================
 //  Тема и звук
 // =========================================================
+const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
+const ICON_BELL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>';
+const ICON_BELL_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 6.5A6 6 0 0 1 18 11v5l1.5 2H9"/><path d="M6 11v5l-1.5 2H5"/><path d="M10 21a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></svg>';
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
-  el.themeBtn.textContent = t === "dark" ? "☀️" : "🌙";
-  el.themeColorMeta.setAttribute("content", t === "dark" ? "#191a20" : "#4f46e5");
+  el.themeBtn.innerHTML = t === "dark" ? ICON_SUN : ICON_MOON;
+  el.themeColorMeta.setAttribute("content", t === "dark" ? "#0b0b10" : "#f3f2f8");
   lsSet("theme", t);
 }
 applyTheme(lsGet("theme", null) || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 el.themeBtn.onclick = () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 
 let soundOn = lsGet("soundOn", true);
-function renderSoundBtn() { el.soundBtn.textContent = soundOn ? "🔔" : "🔕"; }
+function renderSoundBtn() { el.soundBtn.innerHTML = soundOn ? ICON_BELL : ICON_BELL_OFF; el.soundBtn.style.opacity = soundOn ? "1" : ".55"; }
 renderSoundBtn();
 el.soundBtn.onclick = () => { soundOn = !soundOn; lsSet("soundOn", soundOn); renderSoundBtn(); if (soundOn) sfx.correct(); };
 
@@ -301,8 +316,10 @@ async function enterApp(u) {
   setTimeout(() => { entering = false; }, 1500);
   migratePendingQueue();
   await detectFeatures();
-  flushProgress();
+  await flushProgress();
   flushLog();
+  await loadAllCards(true);
+  await migrateSrsV2();
   await goHome();
 }
 
@@ -465,7 +482,7 @@ function computeStreaks(log) {
 //  ГЛАВНАЯ
 // =========================================================
 async function goHome() {
-  showView("home", "Главная", false);
+  showView("home", "WordCards", false);
   renderHome();
   await Promise.all([loadAllCards(), loadDecksData(), flushLog().then(fetchServerLog)]);
   renderHome();
@@ -477,14 +494,19 @@ function renderHome() {
   el.streakFire.classList.toggle("off", !st.todayActive);
   el.streakToday.textContent = today && today.reviewed
     ? `сегодня: ${today.reviewed} ${plural(today.reviewed, "ответ", "ответа", "ответов")} · ${today.correct} верно`
-    : (st.current > 0 ? "сегодня ещё не занималась — не теряй серию!" : "начни сегодня — и серия пойдёт 🔥");
+    : (st.current > 0 ? "сегодня ещё не занималась, не теряй серию" : "начни сегодня, и серия пойдёт");
 
-  const total = allCards.length, learned = allCards.filter(isLearned).length;
-  el.homeTotal.textContent = total; el.homeLearned.textContent = learned; el.homeInProgress.textContent = total - learned;
+  const total = allCards.length, learned = allCards.filter(isLearned).length, learning = allCards.filter(isLearning).length;
+  el.homeTotal.textContent = total; el.homeLearned.textContent = learned; el.homeInProgress.textContent = learning;
 
   const due = SRS_OK ? allCards.filter(isDue).length : 0;
   el.reviewCta.classList.toggle("hidden", due === 0);
-  el.reviewCtaSub.textContent = `${due} ${plural(due, "слово ждёт", "слова ждут", "слов ждут")} повторения`;
+  el.reviewCount.textContent = due;
+  el.reviewCtaSub.textContent = `${plural(due, "слово ждёт", "слова ждут", "слов ждут")} повторения`;
+
+  const h = new Date().getHours();
+  el.homeGreeting.textContent = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+  el.homeDate.textContent = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
 
   const lastId = lsGet("lastDeckId", null);
   const last = decks.find((d) => d.id === lastId);
@@ -500,7 +522,7 @@ function renderHome() {
 
   const p = lsGet("dailyPortion", null);
   const doneToday = p && p.day === dayKey() && p.done;
-  el.portionSub.textContent = doneToday ? "✓ сегодня выполнена — можно взять ещё одну" : "знакомство › 4 варианта › написание › собери слово";
+  el.portionSub.textContent = doneToday ? "сегодня выполнена, можно взять ещё одну" : "4 упражнения по цепочке";
 
   const got = lsGet("achievements", {});
   el.homeAchSub.textContent = `${Object.keys(got).length} из ${ACHIEVEMENTS.length}`;
@@ -520,7 +542,7 @@ function pickPortion() {
     const l = saved.ids.map((id) => allCards.find((c) => c.id === id)).filter(Boolean);
     if (l.length >= 2) return l;
   }
-  const unlearned = allCards.filter((c) => !isLearned(c));
+  const unlearned = allCards.filter((c) => !inSrs(c));   // только слова, которые ещё не в графике повторений
   const list = shuffle(unlearned.filter((c) => !c.correct_streak)).concat(shuffle(unlearned.filter((c) => c.correct_streak))).slice(0, 5);
   lsSet("dailyPortion", { day: today, ids: list.map((c) => c.id), done: false });
   return list;
@@ -964,7 +986,7 @@ function renderParts() {
 let scope = "all"; // 'all' | 'unknown' | 'review'
 function studyList() {
   const base = partList();
-  if (scope === "unknown") return base.filter((c) => !isLearned(c));
+  if (scope === "unknown") return base.filter((c) => !inSrs(c));   // новые: ещё не в графике повторений
   if (scope === "review") return base.filter(isDue);
   return base;
 }
@@ -1024,10 +1046,10 @@ function renderCards() {
   if (currentDeck && currentDeck.virtual) return;
   renderParts();
   const shown = partList();
-  const unknownCount = shown.filter((c) => !isLearned(c)).length;
+  const unknownCount = shown.filter((c) => !inSrs(c)).length;
   const dueCount = shown.filter(isDue).length;
   el.scopeSeg.querySelector('[data-scope="all"]').textContent = part ? `Все (${shown.length})` : "Все";
-  el.scopeSeg.querySelector('[data-scope="unknown"]').textContent = `Незнакомые (${unknownCount})`;
+  el.scopeSeg.querySelector('[data-scope="unknown"]').textContent = `Новые (${unknownCount})`;
   const reviewBtn = el.scopeSeg.querySelector('[data-scope="review"]');
   reviewBtn.textContent = `Повторить (${dueCount})`;
   reviewBtn.classList.toggle("hidden", !SRS_OK);
@@ -1042,7 +1064,10 @@ function renderCards() {
   for (const card of shown) {
     const row = document.createElement("div");
     row.className = "card-row";
-    const badge = isDue(card) ? '<span class="badge-due">⏰ повторить</span>' : (isLearned(card) ? '<span class="badge-learned">✓ выучено</span>' : "");
+    const badge = isDue(card) ? '<span class="badge-due">повторить</span>'
+      : isLearned(card) ? '<span class="badge-learned">выучено</span>'
+      : inSrs(card) ? `<span class="badge-learning">через ${daysUntil(card.next_review_at)} дн.</span>`
+      : (card.correct_streak ? `<span class="badge-learning">${card.correct_streak} из ${ENTER_SRS_AT}</span>` : "");
     row.innerHTML = `
       <div class="grow">
         <div class="term"></div>
@@ -1199,6 +1224,23 @@ function saveProgress(card) {
 function queueProgress(id, patch) {
   const q = lsGet("pendingProgress", {}); q[id] = patch; lsSet("pendingProgress", q);
 }
+// Один раз после смены правил «выучено» (ноябрь 2026): слова, которые раньше за одну сессию
+// улетели на интервал 30–60 дней, возвращаем на шаг «7 дней» и ставим к повторению сегодня.
+// Одно верное повторение → 14 дней → выучено по-честному.
+async function migrateSrsV2() {
+  if (!SRS_OK || lsGet("srsV2", false)) return;
+  const ids = allCards.filter((c) => (c.interval_days || 0) > 7).map((c) => c.id);
+  if (ids.length) {
+    const patch = { interval_days: 7, next_review_at: new Date().toISOString() };
+    const { error } = await client.from("cards").update(patch).in("id", ids);
+    if (error) return;
+    for (const c of allCards) if (ids.includes(c.id)) Object.assign(c, patch);
+    saveAllCardsCache();
+    for (const k of Object.keys(localStorage)) if (k.startsWith("cards_")) localStorage.removeItem(k);
+    toast(`Правила «выучено» стали строже: ${ids.length} ${plural(ids.length, "слово ждёт", "слова ждут", "слов ждут")} подтверждения`);
+  }
+  lsSet("srsV2", true);
+}
 function migratePendingQueue() {
   const old = lsGet("pendingStreaks", null);
   if (!old) return;
@@ -1226,14 +1268,16 @@ window.addEventListener("online", () => { flushProgress(); flushLog(); });
 // Единая оценка ответа: стрик, интервал повторения, дневник, звук, конфетти
 function gradeCard(card, correct) {
   const wasLearned = isLearned(card);
-  card.correct_streak = correct ? card.correct_streak + 1 : 0;
-  if (correct && isLearned(card)) {
-    const iv = nextInterval(card.interval_days || 0);
-    card.interval_days = iv;
-    card.next_review_at = new Date(Date.now() + iv * DAY_MS).toISOString();
+  const iv = card.interval_days || 0;
+  const schedule = (days) => { card.interval_days = days; card.next_review_at = days ? new Date(Date.now() + days * DAY_MS).toISOString() : null; };
+  if (correct) {
+    card.correct_streak = (card.correct_streak || 0) + 1;
+    if (!iv) { if (card.correct_streak >= ENTER_SRS_AT) schedule(SRS_STEPS[0]); }   // вошло в график: повторить завтра
+    else if (isDue(card)) schedule(nextInterval(iv));                                 // вспомнилось в срок: интервал растёт
+    // ответ раньше срока: график не трогаем, иначе «выучено» набегает за одну сессию
   } else {
-    card.interval_days = 0;
-    card.next_review_at = null;
+    card.correct_streak = 0;
+    if (iv) schedule(prevInterval(iv));                                               // ошибка: на шаг назад
   }
   saveProgress(card);
   const nowLearned = correct && !wasLearned && isLearned(card);
@@ -1253,7 +1297,7 @@ el.studyBtn.onclick = () => startStudy();
 
 function startStudy(override, opts) {
   const list = override || studyList();
-  if (!list.length) { toast(scope === "review" ? "Повторять пока нечего 🎉" : "Незнакомых слов нет 🎉 Переключись на «Все»"); return; }
+  if (!list.length) { toast(scope === "review" ? "Повторять пока нечего 🎉" : "Новых слов нет, переключись на «Все»"); return; }
   const intro = !!(opts && opts.intro);
   session = { list: intro ? list.slice() : shuffle(list), index: 0, flipped: false, correct: 0, missed: [], intro, front: "en" };
   el.studyChoices.classList.toggle("hidden", intro);
