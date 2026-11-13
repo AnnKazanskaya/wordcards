@@ -2,7 +2,7 @@
   "appId": "com.annakazanskaya.wordcards",
   "appName": "WordCards",
   "webDir": "www",
-  "backgroundColor": "#f7f7f8",
+  "backgroundColor": "#0b0b10",
   "ios": {
     "contentInset": "never",
     "limitsNavigationsToAppBoundDomains": false
