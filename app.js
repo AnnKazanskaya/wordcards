@@ -423,8 +423,9 @@ function showView(name, title, showBack) {
   el.backBtn.classList.toggle("hidden", !showBack);
   const hideTabs = EXERCISE_VIEWS.includes(name) || name === "reader" || name === "dialogue";
   el.tabbar.classList.toggle("hidden", hideTabs);
+  el.appScreen.classList.toggle("no-nav", hideTabs);   // на компьютере: без бокового меню контент встаёт по центру
   if (VIEW_TAB[name]) currentTab = VIEW_TAB[name];
-  el.tabbar.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.tab === currentTab));
+  el.tabbar.querySelectorAll("button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === currentTab));
   window.scrollTo(0, 0);
 }
 
@@ -437,12 +438,60 @@ el.backBtn.onclick = () => {
   else if (currentView === "book") goRead();
   else goHome();
 };
-el.tabbar.querySelectorAll("button").forEach((b) => {
+el.tabbar.querySelectorAll("button[data-tab]").forEach((b) => {
   b.onclick = () => {
     sfx.tap();
     const t = b.dataset.tab;
     if (t === "home") goHome(); else if (t === "decks") goDecks(); else if (t === "read") goRead(); else goStats();
   };
+});
+
+// ---------- компьютер ----------
+// «Звуки» и «Выйти» на широком экране живут внизу бокового меню, на телефоне — внизу главной
+const deskMq = window.matchMedia("(min-width: 1000px)");
+const homeFoot = document.querySelector(".home-foot");
+function placeHomeFoot() { (deskMq.matches ? el.tabbar : el.homeView).appendChild(homeFoot); }
+placeHomeFoot();
+deskMq.addEventListener("change", placeHomeFoot);
+
+// Клавиатура: Esc закрывает окно или шагает назад; в карточках пробел и стрелки; в тестах цифры 1–4; Enter = «Дальше»
+const shown = (node) => node && !node.classList.contains("hidden") && !node.disabled;
+const NEXT_BTNS = { study: "introNext", scramble: "scrambleNext", write: "writeNext", pron: "pronNext", learn: "learnNext", tasks: "taskNext" };
+const OPTION_BOXES = { quiz: "quizOptions", learn: "learnOptions", tasks: "taskOptions" };
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const sheetOpen = !!document.querySelector(".sheet.show");
+  if (e.key === "Escape") {
+    if (sheetOpen) closeSheets();
+    else if (el.appScreen.classList.contains("active") && shown(el.backBtn)) el.backBtn.click();
+    return;
+  }
+  const tag = (e.target.tagName || "").toLowerCase();
+  if (sheetOpen || tag === "input" || tag === "textarea" || !el.appScreen.classList.contains("active")) return;
+  const v = currentView;
+  if (v === "study") {
+    if (e.key === " " || e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      if (tag === "button") e.target.blur();   // иначе пробел ещё и «нажмёт» кнопку в фокусе
+      el.flashcard.click();
+      return;
+    }
+    if (shown(el.studyChoices)) {
+      if (e.key === "ArrowRight") { e.preventDefault(); el.knowBtn.click(); return; }
+      if (e.key === "ArrowLeft") { e.preventDefault(); el.dontKnowBtn.click(); return; }
+    } else if (e.key === "ArrowRight" && shown(el.introNext)) { e.preventDefault(); el.introNext.click(); return; }
+  }
+  const box = OPTION_BOXES[v] && $(OPTION_BOXES[v]);
+  if (box && shown(box) && /^[1-4]$/.test(e.key)) {
+    const b = box.querySelectorAll("button")[+e.key - 1];
+    if (b && !b.disabled) { e.preventDefault(); b.click(); }
+    return;
+  }
+  if (e.key === "Enter") {
+    if (tag === "button") return;   // у кнопки в фокусе Enter сработает сам
+    const next = NEXT_BTNS[v] && $(NEXT_BTNS[v]);
+    if (shown(next)) { e.preventDefault(); next.click(); }
+  }
 });
 
 // =========================================================
